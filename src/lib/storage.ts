@@ -1,4 +1,5 @@
-import type { Relation, ToneKey, Season, Cause, RELATIONS, TONES, SEASONS, CAUSES } from "./types";
+import { RELATIONS, TONES, SEASONS, CAUSES } from "./types";
+import type { Relation, ToneKey, Season, Cause } from "./types";
 
 export function getItem<T>(key: string): T | null {
   try {
@@ -18,15 +19,34 @@ export function removeItem(key: string): void {
 }
 
 // ============================================================================
+// now() — single wrapper for current timestamp (epoch ms)
+// ============================================================================
+
+function now(): number {
+  return Date.now();
+}
+
+// ============================================================================
 // Core read/write with fallback & error handling
 // ============================================================================
 
 export function readKey<T>(key: string, fallback: T): T {
-  throw new Error("not implemented");
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 export function writeKey<T>(key: string, value: T): { ok: boolean } {
-  throw new Error("not implemented");
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 }
 
 // ============================================================================
@@ -36,13 +56,22 @@ export function writeKey<T>(key: string, value: T): { ok: boolean } {
 export function withCreate<T extends Record<string, any>>(
   data: T
 ): T & { id: string; createdAt: number; updatedAt: number } {
-  throw new Error("not implemented");
+  const timestamp = now();
+  return {
+    ...data,
+    id: crypto.randomUUID(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
 }
 
 export function withUpdate<T extends Record<string, any>>(
   data: T & { id?: string; createdAt?: number; updatedAt?: number }
 ): T & { updatedAt: number } {
-  throw new Error("not implemented");
+  return {
+    ...data,
+    updatedAt: now(),
+  };
 }
 
 // ============================================================================
@@ -50,17 +79,18 @@ export function withUpdate<T extends Record<string, any>>(
 // ============================================================================
 
 export function validateRelation(v: any): v is Relation {
-  throw new Error("not implemented");
+  return typeof v === "string" && (RELATIONS as readonly string[]).includes(v);
 }
 
 export function validateTone(v: any): v is ToneKey {
-  throw new Error("not implemented");
+  return typeof v === "string" && (TONES as readonly string[]).includes(v);
 }
 
 export function validateSeason(v: any): v is Season {
-  throw new Error("not implemented");
+  return typeof v === "string" && (SEASONS as readonly string[]).includes(v);
 }
 
 export function validateCauses(v: any): v is Cause[] {
-  throw new Error("not implemented");
+  if (!Array.isArray(v)) return false;
+  return v.every((c) => typeof c === "string" && (CAUSES as readonly string[]).includes(c));
 }
