@@ -1,0 +1,25 @@
+{
+  "koreanName": "명절휴전",
+  "englishName": "HolidayTruce",
+  "appName": "holiday-truce",
+  "ageRating": "전체",
+  "supportEmail": "support@aifactory.dev",
+  "category": {
+    "primary": "생활",
+    "secondary": "가족"
+  },
+  "subtitle": "명절 스트레스를 계획으로 해결",
+  "description": "명절마다 반복되는 시댁·처가 방문 일정을 한 곳에 정리하세요. AI가 어색한 상황에 대비할 대화 스크립트를 제시하고, 부부가 함께 용돈과 선물 예산을 조율합니다. 방문 후 감정 상태를 기록하면 다음 명절 준비에 도움이 됩니다.",
+  "searchKeywords": [
+    "명절",
+    "시댁",
+    "일정관리",
+    "예산관리",
+    "명절증후군",
+    "부부",
+    "가족행사",
+    "스트레스관리",
+    "며느리",
+    "휴전"
+  ]
+}
