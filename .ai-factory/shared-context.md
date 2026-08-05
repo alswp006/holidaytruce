@@ -62,7 +62,179 @@ export type triggerHapticFn = (type: 'light' | 'medium' | 'heavy') => void;
 
 ## Shared Types Contract (IMPORT these, do NOT redefine)
 ```typescript
-// Domain types — add your app-specific types here
-export {};
+// Reference Catalogs (as const) — Single Source of Truth for all domains
+export const RELATIONS = ["시댁", "처가"] as const;
+export type Relation = typeof RELATIONS[number];
 
+export const TONES = ["정중", "단호", "유머"] as const;
+export type ToneKey = typeof TONES[number];
+
+export const SEASONS = ["2026-설", "2026-추석", "2027-설", "2027-추석"] as const;
+export type Season = typeof SEASONS[number];
+
+export const CAUSES = [
+  "과도한 질문",
+  "가사 부담",
+  "장거리 이동",
+  "비교·잔소리",
+  "경제적 부담",
+  "음식 준비",
+  "형제·친척 갈등",
+  "휴식 부족",
+] as const;
+export type Cause = typeof CAUSES[number];
+
+// Data Models
+
+// AppMeta — Global app flags (singleton, no id)
+export interface AppMeta {
+  aiNoticeAck: boolean;
+  premiumUnlocked: boolean;
+  premiumSeason: Season | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ScriptRequest — AI script generation request (value object, embedded in ScriptResult)
+export interface ScriptRequest {
+  relation: Relation;
+  situation: string; // max 200 chars
+  tone: ToneKey;
+}
+
+// ScriptResult — AI-generated script response (collection entity)
+export interface ScriptResult {
+  id: string; // crypto.randomUUID()
+  request: ScriptRequest;
+  scripts: string[]; // array of 3 generated sentences
+  aiGenerated: true; // label flag for UI
+  createdAt: number; // epoch ms
+  updatedAt: number; // epoch ms
+}
+
+// VisitPlan — Holiday visit schedule (collection entity)
+export interface VisitPlan {
+  id: string; // crypto.randomUUID()
+  relation: Relation;
+  date: string; // "YYYY-MM-DD"
+  hours: number; // 0.5~48 hours
+  memo: string; // max 100 chars
+  createdAt: number;
+  updatedAt: number;
+}
+
+// BudgetItem — Budget item (embedded in BudgetPlan)
+export interface BudgetItem {
+  id: string; // crypto.randomUUID()
+  relation: Relation;
+  label: string; // max 40 chars
+  amount: number; // ₩, 0~10,000,000
+  checked: boolean; // preparation complete flag
+  createdAt: number;
+  updatedAt: number;
+}
+
+// BudgetPlan — Holiday budget plan (singleton, no id)
+export interface BudgetPlan {
+  items: BudgetItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// BurnoutLog — Emotional burnout record (collection entity)
+export interface BurnoutLog {
+  id: string; // crypto.randomUUID()
+  season: Season;
+  score: number; // 1~10
+  causes: Cause[]; // subset of CAUSES catalog
+  note: string; // max 300 chars
+  createdAt: number;
+  updatedAt: number;
+}
+
+// API Contracts
+
+// ScriptApiRequest — External AI API request shape
+export interface ScriptApiRequest {
+  relation: Relation;
+  situation: string; // 1~200 chars
+  tone: ToneKey;
+}
+
+// ScriptApiResponse — External AI API response shape
+export interface ScriptApiResponse {
+  scripts: string[]; // exactly 3 sentences
+}
+
+// ApiError — Standard error response shape
+export interface ApiError {
+  error: string; // error code (e.g., "invalid_situation", "rate_limited", "internal_error")
+}
+
+// RouteState — Type-safe screen-to-screen navigation state
+export type RouteState = {
+  "/": undefined;
+  "/script": undefined;
+  "/script/result": { 
+// ...truncated
 ```
+
+## Existing Codebase (import and use these — do NOT recreate)
+### File Tree (src/)
+  App.tsx
+  components/
+    AdSlot.tsx
+    Amount.tsx
+    BottomCTA.tsx
+    Card.tsx
+    CountUp.tsx
+    FloatingTabBar.tsx
+    MiniBar.tsx
+    PageShell.tsx
+    ScreenScaffold.tsx
+    Sparkline.tsx
+    StateView.tsx
+    SummaryHero.tsx
+    TossPurchase.tsx
+    TossRewardAd.tsx
+  hooks/
+  lib/
+    contract.ts
+    storage.ts
+    types.ts
+    utils.ts
+  main.tsx
+  pages/
+    Home.tsx
+    __TdsGallery.tsx
+  styles/
+    globals.css
+    reward-ad.css
+  types/
+  vite-env.d.ts
+
+### Exports (src/lib/)
+- contract.ts: export type Script =; export type Visit =; export type Budget =; export type Burnout =; export type AppMeta =; export type RouteState =; export type useMetaStoreFn = () =>; export type useDomainStoreFn = () =>
+- storage.ts: export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): void; export function removeItem(key: string): void
+- types.ts: export const RELATIONS = ["시댁", "처가"] as const; export type Relation = typeof RELATIONS[number]; export const TONES = ["정중", "단호", "유머"] as const; export type ToneKey = typeof TONES[number]; export const SEASONS = ["2026-설", "2026-추석", "2027-설", "2027-추석"] as const; export type Season = typeof SEASONS[number]; export const CAUSES = [ "과도한 질문", "가사 부담", "장거리 이동", "비교·잔소리", "경제적 부담", "음식 준비", "형제·친척 갈등", "휴식 부족", ] as const; export type Cause = typeof CAUSES[number]
+- utils.ts: export function cn(...classes: (string | boolean | undefined | null)[]): string; export function formatNumber(n: number): string; export function formatCurrency(n: number, currency = 'KRW'): string
+
+### Components (src/components/)
+- AdSlot.tsx: AdSlot
+- Amount.tsx: Amount
+- BottomCTA.tsx: SubmitFooter, ButtonStack
+- Card.tsx: Card
+- CountUp.tsx: CountUp
+- FloatingTabBar.tsx: FloatingTabBar
+- MiniBar.tsx: MiniBar
+- PageShell.tsx: PageShell
+- ScreenScaffold.tsx: ScreenScaffold
+- Sparkline.tsx: Sparkline
+- StateView.tsx: EmptyState, LoadingState
+- SummaryHero.tsx: SummaryHero
+- TossPurchase.tsx: TossPurchase
+- TossRewardAd.tsx: TossRewardAd
+CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
+
+## Already Implemented (do NOT duplicate or overwrite)
+- 0001: 엔티티 타입·참조 카탈로그·RouteState 정의 (files: src/lib/types.ts)
