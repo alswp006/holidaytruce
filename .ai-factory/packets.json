@@ -1,0 +1,509 @@
+[
+  {
+    "id": "0001",
+    "title": "엔티티 타입·참조 카탈로그·RouteState 정의",
+    "epic": "Epic 1: Data Types",
+    "task": {
+      "description": "SPEC의 모든 데이터 모델·참조 카탈로그·화면 전달 계약을 순수 타입/상수로 정의한다. 런타임 로직 없음. 카탈로그 RELATIONS/TONES/SEASONS/CAUSES를 as const로, 인터페이스 AppMeta/ScriptRequest/ScriptResult/VisitPlan/BudgetItem/BudgetPlan/BurnoutLog, API 계약 ScriptApiRequest/ScriptApiResponse/ApiError, RouteState, STORAGE_KEYS 상수를 정의한다.",
+      "acceptance_criteria": [
+        "tsc --noEmit 통과, 런타임 코드 0줄(상수+타입만)",
+        "RELATIONS/TONES/SEASONS/CAUSES가 as const로 리터럴 유니온 타입 추출",
+        "RouteState[\"/script/result\"]가 {resultId:string}|undefined 타입",
+        "STORAGE_KEYS에 meta/scripts/visits/budget/burnout 5개 holidaytruce:* 키 포함"
+      ]
+    },
+    "covers": [
+      "F1-AC6",
+      "F1-AC7"
+    ],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "모든 인터페이스가 SPEC 필드/제약 주석 포함",
+      "싱글턴(AppMeta/BudgetPlan)은 id 없이 createdAt/updatedAt만 보유"
+    ],
+    "depends_on": [],
+    "db_schema": "interface ScriptResult { id:string; request:ScriptRequest; scripts:string[]; aiGenerated:true; createdAt:number; updatedAt:number } → localStorage key: 'holidaytruce:scripts'; 카탈로그 RELATIONS=['시댁','처가'], TONES=['정중','단호','유머'], CAUSES(8개)",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "localStorage 코어 엔진 (read/write/봉투/검증)",
+    "epic": "Epic 2: Data Layer",
+    "task": {
+      "description": "전 엔티티 공유 저수준 storage 유틸. readKey<T>(key,fallback): 미존재/파싱불가 시 fallback 반환(console.error 미호출). writeKey<T>: QuotaExceededError catch 후 {ok:false} 반환(throw 안 함). 봉투 헬퍼 withCreate(id/createdAt/updatedAt 세팅), withUpdate(updatedAt만 갱신). 카탈로그 검증 validateRelation/Tone/Season/Causes. now() 래퍼 1곳.",
+      "acceptance_criteria": [
+        "존재하지 않는 키 read 시 fallback 반환",
+        "손상 JSON read 시 fallback 반환 & console.error 미호출",
+        "quota 초과 시 throw 없이 {ok:false} 반환, 이전 상태 유지",
+        "withCreate가 UUID/타임스탬프 세팅, withUpdate가 updatedAt만 갱신, 검증 함수가 카탈로그 밖 값에 false"
+      ]
+    },
+    "covers": [
+      "F1-AC1",
+      "F1-AC4",
+      "F1-AC5",
+      "F1-AC6",
+      "F1-AC7",
+      "F1-AC8"
+    ],
+    "files": [
+      "src/lib/storage.ts"
+    ],
+    "definition_of_done": [
+      "프로덕션 빌드 console.error 0개",
+      "withCreate/withUpdate 봉투 규약 준수",
+      "카탈로그 밖 값 저장 거부 신호 반환"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "record envelope: {id, createdAt, updatedAt}; validate via 카탈로그 소속 여부",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "AppMeta·프리미엄 스토어",
+    "epic": "Epic 2: Data Layer",
+    "task": {
+      "description": "싱글턴 AppMeta 접근 계층 + 프리미엄/프로모션. getMeta(): 미존재 시 기본값 생성/반환. ackAiNotice() → aiNoticeAck=true, updatedAt 갱신 저장. unlockPremium(season): premiumUnlocked=true/premiumSeason 저장(season∈SEASONS 검증). grantPromotionRewardSafe({promotionCode,amount}): amount≤5000 검증, 초과 시 차단, 통과 시 '@apps-in-toss/web-framework'의 grantPromotionReward 직접 호출.",
+      "acceptance_criteria": [
+        "최초 getMeta() 기본값 생성·저장",
+        "ackAiNotice 후 재호출 시 aiNoticeAck===true 지속",
+        "unlockPremium('2026-추석') 후 플래그·시즌 반영 및 updatedAt 갱신",
+        "grantPromotionRewardSafe({amount:6000}) 호출 차단(SDK 미호출), 카탈로그 밖 season 저장 거부"
+      ]
+    },
+    "covers": [
+      "F1-AC2",
+      "F1-AC3",
+      "F6-AC1",
+      "F6-AC6"
+    ],
+    "files": [
+      "src/lib/metaStore.ts"
+    ],
+    "definition_of_done": [
+      "getMeta 기본값 {aiNoticeAck:false,premiumUnlocked:false,premiumSeason:null} 생성",
+      "프로모션 5000원 상한 강제"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "AppMeta 싱글턴 → key: 'holidaytruce:meta'",
+    "api_contract": "",
+    "dependencies": [
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "도메인 스토어 (scripts/visits/budget/burnout) CRUD+셀렉터",
+    "epic": "Epic 2: Data Layer",
+    "task": {
+      "description": "4개 컬렉션/문서 CRUD + 파생 셀렉터, 봉투/카탈로그 검증 적용. scripts: addScript(맨앞삽입,최대100), listScripts(createdAt 내림차순), getScript(id). visits: addVisit(hours 0.5~48 검증), deleteVisit, listVisits(date 오름차순), visitBalance→{sumSi,sumCh,imbalanced}. budget: getBudget, addItem, toggleItem, budgetTotals. burnout: addLog(score 1~10), listLogs, burnoutReport→{avg,trend,topCauses}.",
+      "acceptance_criteria": [
+        "각 add가 봉투 필드 채워 저장·목록 반영, 정렬 규약 준수",
+        "visitBalance 한쪽>2배 시 imbalanced:true",
+        "budgetTotals.total = amount 합, burnoutReport.topCauses 최대 3개",
+        "범위/카탈로그 위반 입력은 저장 거부 반환"
+      ]
+    },
+    "covers": [
+      "F2-AC8",
+      "F3-AC2",
+      "F3-AC7",
+      "F4-AC2",
+      "F4-AC6",
+      "F5-AC2",
+      "F5-AC3"
+    ],
+    "files": [
+      "src/lib/domainStore.ts"
+    ],
+    "definition_of_done": [
+      "scripts 100개 캡, visits 200개 캡 강제",
+      "순수 함수 단위 테스트 통과 수준의 결정성",
+      "BudgetPlan 변경 시 updatedAt 갱신"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "VisitPlan[]→'holidaytruce:visits'(date오름차순); BudgetPlan싱글턴→'holidaytruce:budget'; BurnoutLog[]→'holidaytruce:burnout'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0005",
+    "title": "AI 스크립트 API 클라이언트",
+    "epic": "Epic 2: Data Layer",
+    "task": {
+      "description": "외부 Railway API 호출 래퍼. generateScripts(req:ScriptApiRequest): Promise<{ok:true,scripts:string[]}|{ok:false,code:string}>. POST {VITE_SCRIPT_API_BASE}/api/scripts, AbortController 10초 타임아웃. 응답 파싱 실패 또는 scripts.length!==3 → {ok:false,code:'bad_response'}. 4xx/5xx/네트워크 오류 → {ok:false,code}(never throw). 외부 URL은 env 기반(하드코딩 금지).",
+      "acceptance_criteria": [
+        "200 & scripts 3개 → {ok:true}",
+        "scripts 길이≠3 → {ok:false}",
+        "500/네트워크오류 → throw 없이 {ok:false}",
+        "10초 초과 시 abort → {ok:false}"
+      ]
+    },
+    "covers": [
+      "F2-AC9"
+    ],
+    "files": [
+      "src/lib/scriptApi.ts"
+    ],
+    "definition_of_done": [
+      "never throw 보장",
+      "VITE_SCRIPT_API_BASE env 사용, URL 하드코딩 0"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "POST {VITE_SCRIPT_API_BASE}/api/scripts {relation,situation,tone} → {scripts:string[3]} | errors: bad_response/네트워크/타임아웃 → {ok:false,code}",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0006",
+    "title": "홈/대시보드 `/` + AI 첫 고지",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "ScreenScaffold+Top('명절휴전'). 요약 SummaryHero(소진도/예산/방문 균형) 셀렉터 호출, 데이터 없으면 '기록 없음'. 바로가기 ListRow(응대/방문/예산, 높이≥44px)로 navigate. 마운트 시 getMeta().aiNoticeAck===false면 AlertDialog('이 서비스는 생성형 AI를 활용합니다') 1회 표시, '확인' 탭 → ackAiNotice(). data-testid='home-summary' 컨테이너.",
+      "acceptance_criteria": [
+        "최초 진입 시 AI 고지 다이얼로그 1회 표시, 확인 후 재진입 시 미표시",
+        "ListRow 탭 → 각 경로 navigate",
+        "요약 카드 빈 상태 문구 렌더",
+        "메타 파싱 실패해도 기본값으로 크래시 없이 렌더"
+      ]
+    },
+    "covers": [
+      "F1-AC2",
+      "F1-AC3"
+    ],
+    "files": [
+      "src/pages/Home.tsx"
+    ],
+    "definition_of_done": [
+      "ListRow 탭에 tickWeak, AI 고지 확인에 success 햅틱",
+      "HEX 하드코딩 없음, TDS 컴포넌트만 사용"
+    ],
+    "depends_on": [
+      "0003",
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern A StatusPanel. TDS: Top, SummaryHero, Amount, Paragraph, Spacing, ListRow, Chip, AlertDialog, AdSlot. Layout: <Top title='명절휴전'/> → SummaryHero label='이번 명절 소진도' value=<Amount value unit='/10'/> caption='시댁 8h·처가 5h·예산 42만원' → Paragraph '바로 가기' → ListRow(응대 스크립트 만들기/right Chip 'AI', 방문 균형 맞추기, 명절 예산) → AdSlot adGroupId env. Pattern H AI 고지 AlertDialog aiNoticeAck===false 시 1회. States: Loading=SummaryHero 스켈레톤+ListRow 흐림; Empty=caption '아직 기록이 없어요, 아래에서 시작해요'; Error=기본값 렌더 무해. Interactions: ListRow 탭 라우팅+tickWeak, 탭전환 tickWeak, AI 고지 확인 aiNoticeAck=true 저장+success 햅틱."
+  },
+  {
+    "id": "0007",
+    "title": "스크립트 입력 `/script`",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "Tab(시댁/처가), Chip(정중/단호/유머 단일선택), TextField(상황 multiline 200자), 하단 고정 Button('스크립트 만들기'). 이력 리스트 data-testid='script-history'(listScripts 내림차순, 빈 시 Asset.ContentIcon+'아직 생성한 스크립트가 없어요'). 빈 situation→인라인 에러 ' 상황을 입력해주세요', API 미호출. 성공: addScript 후 navigate('/script/result',{state:{resultId}}). 실패: Toast+입력 유지+화면 잔류.",
+      "acceptance_criteria": [
+        "빈 상황 시 API 미호출·에러 표시",
+        "성공 시 저장+resultId 전달 이동",
+        "실패 시 Toast+입력 보존, 대기 중 버튼 비활성+인디케이터",
+        "이력 빈/정렬 상태 정상"
+      ]
+    },
+    "covers": [
+      "F2-AC1",
+      "F2-AC4",
+      "F2-AC5",
+      "F2-AC6",
+      "F2-AC7",
+      "F2-AC8"
+    ],
+    "files": [
+      "src/pages/ScriptInput.tsx"
+    ],
+    "definition_of_done": [
+      "navigate state를 RouteState 타입 캐스팅",
+      "Chip 선택 tickWeak, 생성 CTA success 햅틱"
+    ],
+    "depends_on": [
+      "0004",
+      "0005"
+    ],
+    "db_schema": "",
+    "api_contract": "generateScripts(ScriptApiRequest) 호출",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern FixedBottomCTA. TDS: Top, Tab, Chip, TextField, Paragraph, Spacing, Button, ListRow, Border. Layout: <Top title='응대 스크립트' right=Button '기록'/> → Paragraph '누구에게 응대할까요?' → Chip(시댁/처가 단일토글 filled/outlined) → TextField variant='box' label='어떤 상황인가요?' help='최대 200자' → Paragraph '말투를 골라요' → Chip(정중/단호/유머) → 하단 고정 Button variant='fill' size='large' '스크립트 만들기'. States: Loading=버튼 비활성+'만드는 중이에요…'; Empty=폼 그대로; Error=Paragraph 강조 '인터넷 연결을 확인해주세요'+'다시 시도' Button. Interactions: Chip tickWeak 단일선택, situation 200자 초과 차단, CTA success 햅틱→/script/result 이동. 이력 빈 시 Asset.ContentIcon."
+  },
+  {
+    "id": "0008",
+    "title": "스크립트 결과 `/script/result`",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "location.state를 RouteState로 안전 수신: state=(useLocation().state as RouteState['/script/result'])??null; result=state?getScript(state.resultId):null; if(!result) return <Navigate to='/' replace/>. 무료(premiumUnlocked===false): TossRewardAd 게이트로 결과 감싸기, 중도 종료 시 결과 미노출+Toast '광고를 끝까지 시청해야 결과를 볼 수 있어요'. 상단 Badge 'AI가 생성한 결과입니다'. 무료 시 결과 하단 AdSlot. 복사 버튼(≥44px), '다시 만들기'→navigate('/script').",
+      "acceptance_criteria": [
+        "state 없이/새로고침/직접 진입/미존재 resultId 시 크래시 없이 '/'로 replace 이동",
+        "무료: 광고 완료 후에만 결과, 중도 종료 시 Toast",
+        "프리미엄: 광고 없이 즉시 노출",
+        "AI Badge 항상 표시"
+      ]
+    },
+    "covers": [
+      "F2-AC2",
+      "F2-AC3",
+      "F6-AC2",
+      "F6-AC3",
+      "F6-AC5"
+    ],
+    "files": [
+      "src/pages/ScriptResult.tsx"
+    ],
+    "definition_of_done": [
+      "복사 시 setClipboardText+tickWeak+Toast '복사했어요'",
+      "다시 만들기 success 햅틱"
+    ],
+    "depends_on": [
+      "0003",
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern StatusPanel+OverlayPulse(리워드 게이트). TDS: Top, TossRewardAd, Paragraph, Spacing, ListRow, Button, Badge, Border, AdSlot. Layout: <Top title='추천 응대'/> → <TossRewardAd slotId env>{ AI 라벨 박스 backgroundColor:var(--tds-color-grey50) Paragraph 'AI가 생성한 결과예요' → scripts.map ListRow(top='문장 i+1' bottom=s, right Button '복사') }</TossRewardAd> → Button '다시 만들기' → AdSlot. States: Loading='결과를 준비하고 있어요'+스켈레톤 3줄; Empty=결과 0개 '다시 만들기' 유도; Error=광고 실패 시 광고없이 결과 폴백+Toast '광고를 불러오지 못했어요'. Interactions: 복사 setClipboardText+tickWeak+Toast, 다시 만들기 success 햅틱→/script 값 유지. data-testid='script-result-card'. Badge 'AI가 생성한 결과입니다' 항상."
+  },
+  {
+    "id": "0009",
+    "title": "방문 균형 캘린더 `/calendar`",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "Tab(시댁/처가), TextField(date/hours inputMode='decimal'/memo 100자), Button('추가'). 균형 카드 data-testid='balance-card' Card+MiniBar(sumSi:sumCh 비율), 2배 초과 시 경고 Badge '한쪽에 치우쳐 있어요'. 목록 ListRow(date 오름차순, 삭제 액션 AlertDialog '삭제할까요?'→deleteVisit). 빈 상태 Asset.ContentIcon+'첫 방문 일정을 추가해보세요'. 항목>30 시 가상 스크롤. hours 0 또는 >48 → 인라인 에러 '체류 시간은 0.5~48시간으로 입력해주세요'.",
+      "acceptance_criteria": [
+        "추가 시 visitBalance 반영 및 MiniBar 갱신",
+        "2배 초과 시 경고 Badge 표시",
+        "삭제 AlertDialog 확인 후 deleteVisit 반영",
+        "hours 범위 위반 시 인라인 에러·추가 차단"
+      ]
+    },
+    "covers": [
+      "F3-AC2",
+      "F3-AC7"
+    ],
+    "files": [
+      "src/pages/Calendar.tsx"
+    ],
+    "definition_of_done": [
+      "목록 date 오름차순 정렬",
+      "삭제 다이얼로그 왼쪽 버튼 '닫기'",
+      "추가 CTA success 햅틱"
+    ],
+    "depends_on": [
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern StatusPanel+리스트. TDS: Top, Tab, TextField, Button, Card, Badge, ListRow, AlertDialog, Asset.ContentIcon, Spacing. Layout: Top '방문 균형' → Tab(시댁/처가) → TextField(date, hours inputMode='decimal', memo 100자) → Button '추가' → balance-card Card+MiniBar(sumSi:sumCh) 2배초과 Badge '한쪽에 치우쳐 있어요' → ListRow 목록(date 오름차순, 삭제). States: Empty=Asset.ContentIcon+'첫 방문 일정을 추가해보세요'; Error=hours 위반 인라인 에러. 항목>30 가상 스크롤. Interactions: 추가 success 햅틱, 삭제 AlertDialog '삭제할까요?' 왼쪽 '닫기'. HEX 금지, var(--tds-color-*)만."
+  },
+  {
+    "id": "0010",
+    "title": "예산 계산기 `/budget`",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "Tab(시댁/처가), TextField(label 40자, amount inputMode='numeric' 0~10,000,000), Button('항목 추가'). 합계 카드 budgetTotals(total/sumSi/sumCh/doneCount/itemCount) Card+Amount. 항목 ListRow(체크 Switch toggleItem, 삭제 액션). 빈 상태 Asset.ContentIcon+'예산 항목을 추가해보세요'. label 비어있거나 amount 범위 위반 시 인라인 에러·추가 차단.",
+      "acceptance_criteria": [
+        "항목 추가 시 budgetTotals.total 즉시 갱신",
+        "Switch 토글 시 doneCount 반영 및 updatedAt 갱신",
+        "label 빈값/amount 범위 위반 시 인라인 에러·추가 차단",
+        "빈 상태 문구 렌더"
+      ]
+    },
+    "covers": [
+      "F4-AC2",
+      "F4-AC6"
+    ],
+    "files": [
+      "src/pages/Budget.tsx"
+    ],
+    "definition_of_done": [
+      "Amount로 원화 표시, 항목 체크 tickWeak",
+      "목록 새로고침 후 localStorage에서 복원"
+    ],
+    "depends_on": [
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern StatusPanel+리스트. TDS: Top, Tab, TextField, Button, Card, Amount, ListRow, Switch, Asset.ContentIcon, Spacing. Layout: Top '명절 예산' → Tab(시댁/처가) → TextField(label 40자, amount inputMode='numeric') → Button '항목 추가' → 합계 Card Amount(total, sumSi/sumCh, doneCount/itemCount) → ListRow 목록(right Switch 체크, 삭제). States: Empty=Asset.ContentIcon+'예산 항목을 추가해보세요'; Error=label 빈값/amount 범위 인라인 에러. Interactions: 추가 success 햅틱, Switch 토글 tickWeak. 금액 Amount 컴포넌트, HEX 금지."
+  },
+  {
+    "id": "0011",
+    "title": "감정소진 리포트 `/report`",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "기록 입력: Tab/Chip 시즌 선택(SEASONS), score 슬라이더/Chip 1~10, causes 다중 Chip(CAUSES 8개), Button('기록 추가'). 리포트 카드 burnoutReport(avg/trend/topCauses) Card+Sparkline(trend)+topCauses Chip 상위3. 빈 상태 Asset.ContentIcon+'첫 소진도를 기록해보세요'. score 범위 1~10·causes⊆CAUSES 검증. addLog 후 리포트 즉시 갱신.",
+      "acceptance_criteria": [
+        "기록 추가 시 burnoutReport.avg/trend 갱신",
+        "topCauses 최대 3개 Chip 렌더",
+        "score 범위·causes 카탈로그 위반 시 추가 차단",
+        "빈 상태 문구 렌더"
+      ]
+    },
+    "covers": [
+      "F5-AC2",
+      "F5-AC3"
+    ],
+    "files": [
+      "src/pages/Report.tsx"
+    ],
+    "definition_of_done": [
+      "trend Sparkline season→createdAt 순 렌더",
+      "기록 추가 CTA success 햅틱, Chip 선택 tickWeak"
+    ],
+    "depends_on": [
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern StatusPanel. TDS: Top, Tab, Chip, Button, Card, Paragraph, Asset.ContentIcon, Spacing. Layout: Top '감정소진 기록' → 시즌 Chip(SEASONS) → score 선택 1~10 → causes 다중 Chip(과도한 질문/가사 부담/장거리 이동/비교·잔소리/경제적 부담/음식 준비/형제·친척 갈등/휴식 부족) → Button '기록 추가' → 리포트 Card: avg Amount, trend Sparkline(MiniBar 대체 가능), topCauses 상위3 Chip. States: Empty=Asset.ContentIcon+'첫 소진도를 기록해보세요'; Error=범위/카탈로그 위반 인라인. Interactions: Chip tickWeak, 기록 추가 success 햅틱. HEX 금지 var(--tds-color-*)만."
+  },
+  {
+    "id": "0012",
+    "title": "프리미엄 언락 `/premium`",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "시즌 프리미엄 소개 Card(광고 제거 혜택). TossPurchase sku=VITE_TOSS_IAP_SKU, processProductGrant→unlockPremium(현재 시즌), onPurchased→Toast '프리미엄이 켜졌어요'+상태 갱신. 이미 언락 시(getMeta().premiumUnlocked) 구매 버튼 대신 '이용 중' Badge. 프로모션 코드 입력 TextField+Button→grantPromotionRewardSafe. 하단 AdSlot(무료 시).",
+      "acceptance_criteria": [
+        "미언락 시 TossPurchase 버튼 노출, 언락 시 '이용 중' Badge",
+        "구매 성공 시 unlockPremium 호출 및 상태 갱신",
+        "프로모션 5000원 초과 입력 차단",
+        "프리미엄 사용자에게 AdSlot 미렌더"
+      ]
+    },
+    "covers": [
+      "F6-AC1",
+      "F6-AC6"
+    ],
+    "files": [
+      "src/pages/Premium.tsx"
+    ],
+    "definition_of_done": [
+      "SKU/adGroupId env 참조, 하드코딩 없음",
+      "구매 CTA success 햅틱"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern FixedBottomCTA. TDS: Top, Card, Paragraph, Badge, TextField, Button, Spacing, AdSlot. Layout: Top '시즌 프리미엄' → 혜택 Card(광고 제거·시즌 언락 설명) → 미언락 시 <TossPurchase sku=VITE_TOSS_IAP_SKU processProductGrant={()=>unlockPremium(season)} onPurchased/> , 언락 시 Badge '이용 중' → 프로모션 코드 TextField+Button(grantPromotionRewardSafe) → 무료 시 AdSlot. States: Loading=구매 처리 중 버튼 비활성; Error=구매 실패 Toast. Interactions: 구매 success 햅틱, 프로모션 5000원 초과 차단. HEX 금지."
+  },
+  {
+    "id": "0013",
+    "title": "라우팅 배선·FloatingTabBar·전역 광고 게이팅",
+    "epic": "4",
+    "task": {
+      "description": "src/App.tsx에서 react-router-dom Routes로 모든 페이지 연결: / (Home), /script (ScriptInput), /script/result (ScriptResult), /calendar (Calendar), /budget (Budget), /report (Report), /premium (Premium). 템플릿 FloatingTabBar로 5탭 네비(홈/응대/방문/예산/소진) 배선, 활성 탭 컬러 틴트. 각 페이지 ScreenScaffold로 감싸기. 전역 Provider/광고 SDK 배선. main.tsx는 수정 금지(@AI:ANCHOR).",
+      "acceptance_criteria": [
+        "7개 라우트 모두 정상 이동, /script/result 직접 진입 시 Navigate '/'",
+        "FloatingTabBar 5탭 표시 및 활성 탭 컬러 틴트",
+        "탭 전환 시 tickWeak 햅틱",
+        "앱 부팅 시 크래시 없이 홈 렌더"
+      ]
+    },
+    "covers": [
+      "F1-AC6",
+      "F6-AC5"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "App.tsx가 유일한 라우팅 소유자",
+      "FloatingTabBar 하단 fixed에 env(safe-area-inset-bottom) 패딩",
+      "main.tsx 미수정"
+    ],
+    "depends_on": [
+      "0006",
+      "0007",
+      "0008",
+      "0009",
+      "0010",
+      "0011",
+      "0012"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "react-router-dom",
+      "@toss/tds-mobile"
+    ],
+    "ui_requirements": "FloatingTabBar 5탭: 홈 / · 응대 /script · 방문 /calendar · 예산 /budget · 소진 /report. 활성 탭=컬러 틴트만. 하단 fixed paddingBottom:'calc(Npx + env(safe-area-inset-bottom))'. 각 라우트 ScreenScaffold 래핑."
+  },
+  {
+    "id": "0014",
+    "title": "공유 UX 폴리시 (햅틱·AI 라벨·빈 상태 컴포넌트)",
+    "epic": "Epic 4: Integration",
+    "task": {
+      "description": "페이지들이 재사용하는 공유 UX 헬퍼/컴포넌트 파일만 생성(App.tsx/main.tsx 미수정). haptic.ts: generateHapticFeedback 래퍼(success/tickWeak). AiResultLabel.tsx: 'AI가 생성한 결과입니다' Badge 컴포넌트(TDS Badge, var(--tds-color-*)). EmptyState.tsx: Asset.ContentIcon+문구+CTA Button 공통 빈 상태. 다크모드·safe-area 준수 최종 폴리시.",
+      "acceptance_criteria": [
+        "haptic 래퍼가 success/tickWeak 두 타입 제공",
+        "AiResultLabel이 HEX 없이 TDS 토큰만 사용",
+        "EmptyState가 아이콘+문구+선택적 CTA 렌더",
+        "App.tsx/main.tsx를 files에 포함하지 않음"
+      ]
+    },
+    "covers": [
+      "F2-AC2",
+      "F1-AC2"
+    ],
+    "files": [
+      "src/lib/haptic.ts",
+      "src/components/AiResultLabel.tsx",
+      "src/components/EmptyState.tsx"
+    ],
+    "definition_of_done": [
+      "세 파일 모두 tsc 통과, TDS 컴포넌트만 사용",
+      "진입점 파일 미수정"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "AiResultLabel: TDS Badge/Paragraph, backgroundColor var(--tds-color-grey50), 문구 'AI가 생성한 결과입니다'. EmptyState: Asset.ContentIcon + Paragraph 안내문 + 선택적 Button CTA. 모두 TDS Spacing으로만 여백, HEX 하드코딩 금지."
+  }
+]
