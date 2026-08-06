@@ -8,7 +8,7 @@ import type { ScriptRequest, ScriptResponse } from "@/lib/types";
  * - 서버 응답 200: {result, model} 반환
  * - 4xx/5xx/network/timeout: 통일 에러 throw (호출부가 Toast 처리)
  * - 타임아웃: 15초
- * - console.error 미사용
+ * - SDK error 가드로 조용히 처리 (에러 UI 상태로 전환)
  */
 
 export class ApiError extends Error {
