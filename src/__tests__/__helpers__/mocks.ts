@@ -55,7 +55,8 @@ export function mockTds() {
         React.createElement("span", { "data-typography": typography, ...props }, children),
     },
 
-    Badge: ({ children }: any) => React.createElement("span", { role: "status" }, children),
+    Badge: ({ children, ...props }: any) =>
+      React.createElement("span", { role: "status", ...props }, children),
 
     AlertDialog: Object.assign(
       ({ open, title, description, alertButton }: any) =>
@@ -166,8 +167,8 @@ export function mockTds() {
         children,
       ),
 
-    Switch: ({ checked, onChange }: any) =>
-      React.createElement("input", { type: "checkbox", checked, onChange, role: "switch" }),
+    Switch: ({ checked, onChange, ...props }: any) =>
+      React.createElement("input", { type: "checkbox", checked, onChange, role: "switch", ...props }),
   }));
 }
 

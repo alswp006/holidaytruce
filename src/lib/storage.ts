@@ -101,6 +101,14 @@ export function removeBudget(id: string): void {
   removeById(STORAGE_KEYS.budgets, id);
 }
 
+export function updateBudget(id: string, patch: Partial<Omit<BudgetItem, 'id' | 'holidayId' | 'createdAt'>>): void {
+  const items = listAll<BudgetItem>(STORAGE_KEYS.budgets);
+  set(
+    STORAGE_KEYS.budgets,
+    items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+  );
+}
+
 // ---- ChecklistItem ----
 
 export function listChecklist(holidayId: string): ChecklistItem[] {
