@@ -51,7 +51,7 @@ export function mockTds() {
     Badge: ({ children }: any) => React.createElement("span", { role: "status" }, children),
 
     AlertDialog: Object.assign(
-      ({ open, title, description, alertButton, onClose }: any) =>
+      ({ open, title, description, alertButton }: any) =>
         open
           ? React.createElement(
               "div",
@@ -59,7 +59,6 @@ export function mockTds() {
               React.createElement("h2", null, title),
               React.createElement("p", null, description),
               alertButton,
-              React.createElement("button", { onClick: onClose, "aria-label": "닫기" }, "닫기"),
             )
           : null,
       {

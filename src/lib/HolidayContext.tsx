@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertDialog } from '@toss/tds-mobile';
-import { getItem, setItem } from './storage';
+import type { AppMeta } from './types';
+import { getMeta, setMeta } from './meta';
 
 /**
  * 현재 명절 컨텍스트 + 전역 quota 알림.
@@ -11,35 +12,6 @@ import { getItem, setItem } from './storage';
  * - localStorage 용량 초과(QuotaExceededError) 시 `reportQuotaExceeded()`가 호출되면
  *   Provider 레벨에서 AlertDialog를 렌더한다(어느 페이지에 있든 크래시 없이 안내).
  */
-
-const META_KEY = 'ht.meta';
-
-type AppMeta = {
-  aiNoticeAck: boolean;
-  currentHolidayId: string;
-  isPaid: boolean;
-};
-
-// 2026 명절 (spec: 설날/추석). 오늘(2026-08-07) 기준 가장 가까운 다가오는 명절이 기본값.
-const HOLIDAYS = [
-  { id: '2026-seollal', date: '2026-02-17' },
-  { id: '2026-chuseok', date: '2026-09-25' },
-];
-
-function defaultHolidayId(): string {
-  const today = new Date().toISOString().slice(0, 10);
-  const upcoming = HOLIDAYS.find((h) => h.date >= today);
-  return (upcoming ?? HOLIDAYS[HOLIDAYS.length - 1]).id;
-}
-
-function loadMeta(): AppMeta {
-  const stored = getItem<Partial<AppMeta>>(META_KEY);
-  return {
-    aiNoticeAck: stored?.aiNoticeAck ?? false,
-    currentHolidayId: stored?.currentHolidayId ?? defaultHolidayId(),
-    isPaid: stored?.isPaid ?? false,
-  };
-}
 
 export type HolidayContextValue = {
   currentHolidayId: string;
@@ -61,12 +33,12 @@ export function reportQuotaExceeded(): void {
 }
 
 export function HolidayProvider({ children }: { children: ReactNode }) {
-  const [meta, setMeta] = useState<AppMeta>(() => loadMeta());
+  const [meta, setMetaState] = useState<AppMeta>(() => getMeta());
   const [quotaExceeded, setQuotaExceeded] = useState(false);
 
   const persist = useCallback((next: AppMeta) => {
+    setMetaState(next);
     setMeta(next);
-    setItem(META_KEY, next);
   }, []);
 
   const setCurrentHoliday = useCallback(
@@ -109,12 +81,8 @@ export function HolidayProvider({ children }: { children: ReactNode }) {
       {children}
       <AlertDialog
         open={quotaExceeded}
-        title={<AlertDialog.Title>저장 공간 부족</AlertDialog.Title>}
-        description={
-          <AlertDialog.Description>
-            저장 공간이 부족합니다. 이전 명절 기록을 삭제해주세요
-          </AlertDialog.Description>
-        }
+        title="저장 공간 부족"
+        description="저장 공간이 부족합니다. 이전 명절 기록을 삭제해주세요"
         alertButton={
           <AlertDialog.AlertButton onClick={() => setQuotaExceeded(false)}>
             닫기
