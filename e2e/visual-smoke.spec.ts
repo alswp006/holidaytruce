@@ -14,12 +14,26 @@ const ROUTES: { path: string; name: string }[] = [
   { path: "/", name: "home" },
   { path: "/schedule", name: "schedule" },
   { path: "/budget", name: "budget" },
+  { path: "/stress", name: "stress" },
+  { path: "/stress", name: "stress-with-data" },
 ];
 
 /** 데이터가 필요한 화면용 localStorage 시드(앱에 맞게 채워라). 앱 스크립트보다 먼저 실행된다. */
-async function seed(page: Page): Promise<void> {
+async function seed(page: Page, routeName: string): Promise<void> {
+  if (routeName !== "stress-with-data") return;
   await page.addInitScript(() => {
-    // window.localStorage.setItem("MY_STORAGE_KEY", JSON.stringify({ /* ... */ }));
+    window.localStorage.setItem(
+      "ht.meta",
+      JSON.stringify({ aiNoticeAck: true, currentHolidayId: "2026-chuseok", isPaid: true }),
+    );
+    window.localStorage.setItem(
+      "ht.stressLogs",
+      JSON.stringify([
+        { id: "s1", holidayId: "2026-chuseok", score: 8, triggers: ["잔소리", "비교"], memo: "차례 준비 과로", createdAt: 0 },
+        { id: "s2", holidayId: "2026-chuseok", score: 6, triggers: ["잔소리"], memo: "장거리 이동 피곤", createdAt: 1 },
+        { id: "s3", holidayId: "2026-chuseok", score: 7, triggers: ["경제적 부담"], memo: "용돈 부담", createdAt: 2 },
+      ]),
+    );
   });
 }
 
@@ -48,7 +62,7 @@ for (const route of ROUTES) {
     page.on("pageerror", (e) => errors.push(e.message));
 
     await stubIconCdn(page);
-    await seed(page);
+    await seed(page, route.name);
     await page.goto(route.path);
     await page.waitForTimeout(1000); // React 렌더 + effect 정착
 

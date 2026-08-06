@@ -160,10 +160,10 @@ export function mockTds() {
     // Chip은 그룹 컨테이너(div), 개별 선택 가능한 항목은 ChipItem(button)이다 — 실제 .d.ts 기준.
     Chip: ({ children }: any) => React.createElement("div", { role: "group" }, children),
 
-    ChipItem: ({ children, selected, onClick, disabled }: any) =>
+    ChipItem: ({ children, selected, onClick, disabled, ...props }: any) =>
       React.createElement(
         "button",
-        { type: "button", "aria-pressed": selected === true, onClick, disabled },
+        { type: "button", "aria-pressed": selected === true, onClick, disabled, ...props },
         children,
       ),
 
