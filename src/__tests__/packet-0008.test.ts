@@ -60,14 +60,18 @@ vi.mock("@/lib/storage", async () => {
 });
 
 // ── API 클라이언트 더블 ──
-class MockApiError extends Error {
-  status?: number;
-  constructor(message: string, status?: number) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
+// class는 vi.hoisted로 감싸야 vi.mock 팩토리(파일 최상단으로 호이스팅됨)에서
+// TDZ(Cannot access before initialization) 없이 참조할 수 있다.
+const MockApiError = vi.hoisted(() => {
+  return class MockApiError extends Error {
+    status?: number;
+    constructor(message: string, status?: number) {
+      super(message);
+      this.name = "ApiError";
+      this.status = status;
+    }
+  };
+});
 
 const generateScriptMock = vi.hoisted(() => vi.fn());
 

@@ -27,8 +27,15 @@ export function mockTds() {
       React.createElement("button", { onClick, ...props }, children),
 
     ListRow: Object.assign(
-      ({ children, onClick, ...props }: any) =>
-        React.createElement("div", { onClick, role: "listitem", ...props }, children),
+      ({ children, left, contents, right, onClick, ...props }: any) =>
+        React.createElement(
+          "div",
+          { onClick, role: "listitem", ...props },
+          left,
+          contents,
+          right,
+          children,
+        ),
       {
         Text: ({ children }: any) => React.createElement("span", null, children),
         Texts: ({ top, bottom, type }: any) =>
@@ -139,16 +146,23 @@ export function mockTds() {
     BottomCTA: ({ children }: any) =>
       React.createElement("div", { "data-slot": "bottom-cta" }, children),
 
+    // FixedBottomCTA는 그 자체가 <button>이다(.d.ts: HTMLButtonElement) — src/components/BottomCTA.tsx(SubmitFooter)가 감싸는 실제 export.
+    FixedBottomCTA: ({ children, onClick, disabled, ...props }: any) =>
+      React.createElement("button", { onClick, disabled, ...props }, children),
+
     BottomSheet: Object.assign(
       ({ children, open }: any) =>
         open ? React.createElement("div", { role: "dialog" }, children) : null,
       { Header: ({ children }: any) => React.createElement("div", null, children) },
     ),
 
-    Chip: ({ children, selected, onClick }: any) =>
+    // Chip은 그룹 컨테이너(div), 개별 선택 가능한 항목은 ChipItem(button)이다 — 실제 .d.ts 기준.
+    Chip: ({ children }: any) => React.createElement("div", { role: "group" }, children),
+
+    ChipItem: ({ children, selected, onClick, disabled }: any) =>
       React.createElement(
         "button",
-        { role: "button", "aria-pressed": selected, onClick },
+        { type: "button", "aria-pressed": selected === true, onClick, disabled },
         children,
       ),
 
@@ -281,18 +295,14 @@ export function mockAppsInToss() {
 }
 
 // ── Toss Reward Ad Component ──
-// TossRewardAd is a project-local component that wraps content behind ad viewing.
-// In tests, render the children directly (ad always "watched").
-export function mockTossRewardAd() {
-  vi.mock("@/components/TossRewardAd", () => ({
-    TossRewardAd: ({ children, onReward }: any) => {
-      // Auto-trigger onReward in tests to unlock content
-      if (onReward) setTimeout(onReward, 0);
-      return children;
-    },
-    default: ({ children }: any) => children,
-  }));
-}
+// NOTE: vi.mock() calls are hoisted to the top of whatever FILE contains them and
+// run unconditionally as soon as that file is loaded — even if written inside a
+// function that is never called (see Vitest hoisting docs). A vi.mock("@/components/TossRewardAd", ...)
+// here would therefore fire for every test that merely imports this helpers module
+// (e.g. for mockTds()/mockAppsInToss()), silently overriding any test-local
+// vi.mock("@/components/TossRewardAd", ...) that declares different behavior
+// (e.g. gating on an ad-watched flag). So this is intentionally NOT provided as a
+// shared helper — mock "@/components/TossRewardAd" inline in the test file that needs it.
 
 // ── react-router-dom ──
 // Preserve actual router + override useNavigate for assertion.
@@ -310,9 +320,10 @@ export function mockRouter() {
 }
 
 // ── Convenience: mock everything ──
+// NOTE: does not mock "@/components/TossRewardAd" — see comment above; mock it
+// inline in the test file if the page under test renders it.
 export function mockAll() {
   mockTds();
   mockAppsInToss();
-  mockTossRewardAd();
   mockRouter();
 }

@@ -1,73 +1,217 @@
-import { Top, Paragraph, Spacing, ListRow, Button } from '@toss/tds-mobile';
+import { useEffect, useState } from 'react';
+import { Top, Chip, ChipItem, Paragraph, Spacing, ListRow, Button, Badge, Asset } from '@toss/tds-mobile';
 import { useNavigate } from 'react-router-dom';
+import { generateHapticFeedback } from '@apps-in-toss/web-framework';
 import { ScreenScaffold } from '../components/ScreenScaffold';
 import { SummaryHero } from '../components/SummaryHero';
 import { Card } from '../components/Card';
+import { CountUp } from '../components/CountUp';
+import { MiniBar } from '../components/MiniBar';
+import { EmptyState, LoadingState } from '../components/StateView';
+import { FloatingTabBar } from '../components/FloatingTabBar';
+import { TABS } from '../lib/nav';
+import { HOLIDAYS } from '../lib/constants';
+import { useHoliday } from '../lib/HolidayContext';
+import { listBudgets, listSchedules, listStressLogs } from '../lib/storage';
+import { formatNumber } from '../lib/utils';
+import type { BudgetItem, StressLog, VisitSchedule } from '../lib/types';
 
-/**
- * Golden Home page — 대시보드/탭-루트 골든 레퍼런스.
- *
- * 다른 페이지를 쓸 때 이 패턴을 모방하라:
- * - ScreenScaffold로 감싼다(raw fragment 골격 금지) — safe-area + 100dvh 자동 처리.
- * - 화면 최상단에 SummaryHero로 시각 앵커를 만든다('휑함'의 가장 큰 원인은 앵커 부재).
- *   데이터가 있으면 value에 <Amount value={n} unit="원" typography="t1" />로 핵심 숫자를 크게 박아라.
- * - 1차 진입 액션은 SummaryHero 카드 내부 버튼(display="block", 전체폭)에 둔다.
- *   → 화면 중앙 부유/좌측 글자폭 버튼 금지. 하단 TabBar가 있으면 SubmitFooter와 겹치므로 카드 안에.
- * - 핵심 정보는 raw <div>가 아니라 Card로 묶어 위계를 만든다.
- * - 하단 탭이 필요하면(2~5탭): bottom={<FloatingTabBar items={[{label,path}...]} />}.
- *   ('TDS TabBar'는 존재하지 않는다 — 직접 만들지 말고 FloatingTabBar를 써라.)
- * - 카피는 CLAUDE.md "카피 규칙 — AI 냄새 금지"를 따른다: 기능 나열식 홍보 문구·상투구·
- *   generic 버튼("시작하기") 금지. 이 파일의 예시 문구도 앱 맥락에 맞게 교체 대상이다.
- *
- * Scaffold tokens (replaced by scaffold-toss.ts at project creation):
- *   HolidayTruce -> the app's display name
- *   명절증후군은 매년 언론·맘카페에 반복 등장하는 검증된 페인포인트지만, 연 2회뿐인 이벤트라 대기업들이 거들떠보지 않는 사각지대 — 그 좁은 틈을 시댁 응대 스크립트와 일정·예산 조율 도구로 공략.    -> the one-line description
- */
+const EMPTY_HINT = '아직 기록이 없어요 · 추가하기';
 
-// ⚠ 이 목록은 골격 예시다 — 앱의 실제 콘텐츠(핵심 지표·최근 기록·바로가기)로 반드시 교체하라.
-// '간편한 사용/빠른 처리' 같은 기능 나열식 홍보 문구는 카피 규칙(CLAUDE.md "AI 냄새 금지") 위반이다.
-// 사용자가 이 화면에서 실제로 확인할 정보를 넣어라 — 아래처럼 데이터가 사는 행으로.
-const HIGHLIGHTS = [
-  { title: '오늘', description: '아직 기록이 없어요' },
-  { title: '이번 주', description: '기록 3건 · 평균 12분' },
-];
+// UTC 캘린더 날짜 기준 D-day (자정 시각 차이로 인한 타임존 오차 방지)
+function diffDaysUTC(dateStr: string, now: Date): number {
+  const target = Date.parse(`${dateStr}T00:00:00.000Z`);
+  const today = Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
+  return Math.round((target - today) / 86400000);
+}
+
+function ddayLabel(diff: number): string {
+  if (diff > 0) return `D-${diff}`;
+  if (diff === 0) return 'D-DAY';
+  return `D+${Math.abs(diff)}`;
+}
+
+function safeHaptic() {
+  try {
+    Promise.resolve(generateHapticFeedback({ type: 'tickWeak' })).catch(() => {});
+  } catch {
+    /* WebView 밖에서는 throw — 무시 */
+  }
+}
+
+function countBySide(list: VisitSchedule[], side: '본가' | '처가'): number {
+  return list.filter((s) => s.side === side).length;
+}
 
 export default function Home() {
   const navigate = useNavigate();
+  const { currentHolidayId, setCurrentHoliday, isPaid } = useHoliday();
+
+  const [loading, setLoading] = useState(true);
+  const [budgets, setBudgets] = useState<BudgetItem[]>([]);
+  const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
+  const [stressLogs, setStressLogs] = useState<StressLog[]>([]);
+
+  useEffect(() => {
+    setBudgets(listBudgets(currentHolidayId));
+    setSchedules(listSchedules(currentHolidayId));
+    setStressLogs(listStressLogs(currentHolidayId));
+    setLoading(false);
+  }, [currentHolidayId]);
+
+  const currentHoliday = HOLIDAYS.find((h) => h.id === currentHolidayId) ?? HOLIDAYS[0];
+  const dday = diffDaysUTC(currentHoliday.date, new Date());
+
+  const budgetTotal = budgets.reduce((sum, b) => sum + b.amount, 0);
+  const hongaBudget = budgets.filter((b) => b.side === '본가').reduce((sum, b) => sum + b.amount, 0);
+  const hongaBudgetPct = budgetTotal > 0 ? Math.round((hongaBudget / budgetTotal) * 100) : 0;
+
+  const hongaCount = countBySide(schedules, '본가');
+  const cheogaCount = countBySide(schedules, '처가');
+  const visitTotal = hongaCount + cheogaCount;
+  const hongaRatio = visitTotal > 0 ? hongaCount / visitTotal : 0;
+
+  const recentStress = stressLogs.slice(-5);
+  const avgStress =
+    recentStress.length > 0
+      ? Math.round((recentStress.reduce((sum, s) => sum + s.score, 0) / recentStress.length) * 10) / 10
+      : 0;
+
+  const allEmpty = budgets.length === 0 && schedules.length === 0 && stressLogs.length === 0;
+
+  const goBudget = () => {
+    safeHaptic();
+    navigate('/budget');
+  };
+  const goSchedule = () => {
+    safeHaptic();
+    navigate('/schedule');
+  };
+  const goStress = () => {
+    safeHaptic();
+    navigate('/stress');
+  };
+  const goPaywall = () => {
+    safeHaptic();
+    navigate('/paywall');
+  };
 
   return (
     <ScreenScaffold
-      top={<Top title={<Top.TitleParagraph>HolidayTruce</Top.TitleParagraph>} />}
+      top={<Top title={<Top.TitleParagraph>명절휴전</Top.TitleParagraph>} />}
+      bottom={<FloatingTabBar items={TABS} />}
     >
-      {/* 시각 앵커: 헤드라인 + 카드 내 진입 버튼(부유 금지, display="block" 전체폭).
-          데이터 앱이면 value를 <Amount typography="t1" />(핵심 숫자)로 교체하라. */}
-      <SummaryHero
-        label="HolidayTruce"
-        value={<Paragraph.Text typography="t2">명절증후군은 매년 언론·맘카페에 반복 등장하는 검증된 페인포인트지만, 연 2회뿐인 이벤트라 대기업들이 거들떠보지 않는 사각지대 — 그 좁은 틈을 시댁 응대 스크립트와 일정·예산 조율 도구로 공략.</Paragraph.Text>}
-        caption="로그인 없이 바로 쓸 수 있어요"
-        action={
-          // 라벨은 앱의 핵심 행동 동사로 교체하라 — "연봉 계산하기"/"기록 남기기" 등.
-          // generic "시작하기"/"확인"은 카피 규칙 위반. onClick도 실제 첫 화면 경로로.
-          <Button variant="fill" display="block" onClick={() => navigate('/')}>
-            첫 결과 보기
-          </Button>
-        }
-        testId="home-hero"
-      />
+      {loading ? (
+        <LoadingState rows={4} testId="dashboard-loading" />
+      ) : (
+        <>
+          <Chip kind="select" wrap>
+            {HOLIDAYS.map((h) => (
+              <ChipItem
+                key={h.id}
+                selected={h.id === currentHolidayId}
+                onClick={() => {
+                  if (h.id === currentHolidayId) return;
+                  safeHaptic();
+                  setCurrentHoliday(h.id);
+                }}
+              >
+                {h.label} {ddayLabel(diffDaysUTC(h.date, new Date()))}
+              </ChipItem>
+            ))}
+          </Chip>
 
-      <Spacing size={24} />
+          <Spacing size={16} />
 
-      {/* 핵심 정보는 Card로 묶기(raw div 금지) — 위계 생성 */}
-      <Card testId="home-highlights">
-        {HIGHLIGHTS.map((h, idx) => (
-          <ListRow
-            key={idx}
-            contents={<ListRow.Texts type="2RowTypeA" top={h.title} bottom={h.description} />}
+          <SummaryHero
+            label={`다가오는 ${currentHoliday.label}까지`}
+            value={<CountUp value={Math.max(dday, 0)} unit="일" typography="t1" />}
+            caption={`${currentHoliday.date.slice(0, 4)}년 ${currentHoliday.label} · ${currentHoliday.date}`}
+            testId="home-dday-hero"
           />
-        ))}
-      </Card>
 
-      <Spacing size={24} />
+          <Spacing size={16} />
+
+          {allEmpty ? (
+            <>
+              <EmptyState
+                icon={<Asset.ContentIcon name="iconGiftRegular" alt="온보딩" />}
+                title="명절 준비를 시작해보세요"
+                description="예산·일정·감정 기록을 하나씩 추가하면 대시보드가 채워져요"
+              />
+              <Spacing size={16} />
+            </>
+          ) : null}
+
+          <div data-testid="dashboard-cards" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Card testId="dashboard-card-budget" onClick={goBudget}>
+              <ListRow
+                contents={
+                  <ListRow.Texts
+                    type="2RowTypeA"
+                    top="예산 총합"
+                    bottom={budgets.length > 0 ? `${formatNumber(budgetTotal)}원` : EMPTY_HINT}
+                  />
+                }
+                right={
+                  budgets.length > 0 ? (
+                    <Badge variant="weak" color="blue" size="small">
+                      본가 {hongaBudgetPct}%
+                    </Badge>
+                  ) : undefined
+                }
+              />
+            </Card>
+
+            <Card testId="dashboard-card-balance" onClick={goSchedule}>
+              <ListRow
+                contents={
+                  <ListRow.Texts
+                    type="2RowTypeA"
+                    top="양가 방문 균형"
+                    bottom={schedules.length > 0 ? `본가 ${hongaCount}건 / 처가 ${cheogaCount}건` : EMPTY_HINT}
+                  />
+                }
+              />
+              {schedules.length > 0 ? (
+                <>
+                  <Spacing size={8} />
+                  <MiniBar ratio={hongaRatio} />
+                </>
+              ) : null}
+            </Card>
+
+            <Card testId="dashboard-card-stress" onClick={goStress}>
+              <ListRow
+                contents={
+                  <ListRow.Texts
+                    type="2RowTypeA"
+                    top="최근 감정소진도"
+                    bottom={recentStress.length > 0 ? `평균 ${avgStress} / 10` : EMPTY_HINT}
+                  />
+                }
+              />
+            </Card>
+          </div>
+
+          {!isPaid ? (
+            <>
+              <Spacing size={16} />
+              <Card testId="dashboard-card-paywall" onClick={goPaywall}>
+                <Paragraph.Text typography="t5">시즌권으로 무제한 이용해요</Paragraph.Text>
+                <Spacing size={4} />
+                <Paragraph.Text typography="t6">AI 응대 스크립트와 전체 리포트를 잠금 해제해요</Paragraph.Text>
+                <Spacing size={16} />
+                {/* Card 자체가 onClick(goPaywall)을 갖는다 — 버튼 클릭도 그대로 버블링되어 처리되므로
+                    여기 onClick을 중복으로 걸면 같은 탭에 navigate가 두 번 불린다. */}
+                <Button variant="fill" size="medium" display="block">
+                  시즌권 보기
+                </Button>
+              </Card>
+            </>
+          ) : null}
+        </>
+      )}
     </ScreenScaffold>
   );
 }

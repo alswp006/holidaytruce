@@ -12,8 +12,7 @@ import { test, expect, type Page } from "@playwright/test";
  */
 const ROUTES: { path: string; name: string }[] = [
   { path: "/", name: "home" },
-  // { path: "/result", name: "result" },   // ← 이 앱의 라우트를 추가
-  // { path: "/settings", name: "settings" },
+  { path: "/schedule", name: "schedule" },
 ];
 
 /** 데이터가 필요한 화면용 localStorage 시드(앱에 맞게 채워라). 앱 스크립트보다 먼저 실행된다. */
@@ -26,6 +25,19 @@ async function seed(page: Page): Promise<void> {
 // 토스 WebView 밖(일반 브라우저)에서만 나는 알려진 dev 에러 — 무시(실기기 WebView엔 안 남)
 const IGNORED_CONSOLE = [/SafeAreaInsets/i, /getSafeAreaInsets/i];
 
+// Asset.Icon/ContentIcon은 런타임에 https://static.toss.im/icons/svg/*.svg를 fetch한다.
+// 이 샌드박스 환경은 외부 네트워크가 막혀 있어(403) Suspense 경계가 트립하며 console.error를
+// 남긴다 — 실제 기기(WebView)에선 정상 로드되는 네트워크 제약일 뿐 앱 버그가 아니므로 스텁으로 흡수.
+async function stubIconCdn(page: Page): Promise<void> {
+  await page.route("https://static.toss.im/icons/svg/**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"></svg>',
+    }),
+  );
+}
+
 for (const route of ROUTES) {
   test(`visual smoke: ${route.name} (${route.path})`, async ({ page }) => {
     const errors: string[] = [];
@@ -34,6 +46,7 @@ for (const route of ROUTES) {
     });
     page.on("pageerror", (e) => errors.push(e.message));
 
+    await stubIconCdn(page);
     await seed(page);
     await page.goto(route.path);
     await page.waitForTimeout(1000); // React 렌더 + effect 정착
