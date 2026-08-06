@@ -208,3 +208,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0004: 백엔드 스캐폴딩 + CORS + 헬스체크 (files: server/package.json, server/src/index.ts, server/.env.example)
 - 0006: 스크립트 생성 API 클라이언트 (files: src/lib/api.ts)
 - 0010: 예산 계산기 & 갈등 방지 체크리스트 페이지 /budget (files: src/pages/Budget.tsx)
+- 0011: 감정소진 리포트 페이지 /stress (files: src/pages/Stress.tsx)
