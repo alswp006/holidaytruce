@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { IAP } from "@apps-in-toss/web-framework";
+import "@/styles/toss-purchase.css";
 
 /** 결제 성공 결과 (IapCreateOneTimePurchaseOrderResult 일부) */
 export interface TossPurchaseResult {
