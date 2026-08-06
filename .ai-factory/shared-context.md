@@ -207,3 +207,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0003: 명절 컨텍스트 + meta 상태 관리 (files: src/lib/HolidayContext.tsx, src/lib/meta.ts)
 - 0004: 백엔드 스캐폴딩 + CORS + 헬스체크 (files: server/package.json, server/src/index.ts, server/.env.example)
 - 0006: 스크립트 생성 API 클라이언트 (files: src/lib/api.ts)
+- 0010: 예산 계산기 & 갈등 방지 체크리스트 페이지 /budget (files: src/pages/Budget.tsx)
