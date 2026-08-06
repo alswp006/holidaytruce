@@ -59,12 +59,17 @@ export interface ScriptRequest {
 
 export interface ScriptResponse {
   result: string;
-  id: string;
-  createdAt: number;
+  model: string;
 }
 
+// 클라이언트 API 에러 응답 (단순)
 export interface ApiError {
-  code: number;
+  error: string;
+}
+
+// 서버 에러 응답 (더 상세)
+export interface ServerApiError {
+  code: string;
   message: string;
 }
 

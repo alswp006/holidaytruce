@@ -169,33 +169,30 @@ describe("AC-2: ScriptRequest/ScriptResponse/ApiError API 타입 정의", () => 
   it("AC-2.2[P0]: ScriptResponse 타입 검증", () => {
     const response: ScriptResponse = {
       result: "직종을 구체적으로 설명하고 현재 프로젝트에 대해 얘기하세요",
-      id: "sr-gen-001",
-      createdAt: 1707558000000,
+      model: "claude-opus-4",
     };
 
     expect(response.result).toBeDefined();
-    expect(response.id).toBeDefined();
-    expect(response.createdAt).toBeGreaterThan(0);
+    expect(response.model).toBeDefined();
+    expect(response.model).toMatch(/^claude-/);
   });
 
   it("AC-2.3[P0]: ApiError 타입 검증 - 4xx 에러", () => {
     const error: ApiError = {
-      code: 400,
-      message: "Invalid situation format",
+      error: "상황 입력이 올바르지 않습니다",
     };
 
-    expect(error.code).toBe(400);
-    expect(error.message).toBeDefined();
+    expect(error.error).toBeDefined();
+    expect(typeof error.error).toBe("string");
   });
 
   it("AC-2.4[P0]: ApiError 타입 검증 - 5xx 에러", () => {
     const error: ApiError = {
-      code: 500,
-      message: "Server error",
+      error: "스크립트 생성에 실패했습니다",
     };
 
-    expect(error.code).toBe(500);
-    expect(typeof error.message).toBe("string");
+    expect(error.error).toBeDefined();
+    expect(typeof error.error).toBe("string");
   });
 });
 

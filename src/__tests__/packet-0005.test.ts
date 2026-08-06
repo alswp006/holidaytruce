@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { ScriptRequest, ScriptResponse, ApiError } from "@/lib/types";
+import type { ScriptRequest, ScriptResponse, ApiError, ServerApiError } from "@/lib/types";
 
 /**
  * POST /api/script 엔드포인트 테스트
@@ -30,7 +30,7 @@ interface CallApiOptions {
  */
 async function callScriptApi(
   body: Partial<CallApiOptions>,
-): Promise<{ status: number; data: ScriptResponse | ApiError }> {
+): Promise<{ status: number; data: ScriptResponse | ServerApiError }> {
   // TBD: 실제 구현에서 fetch 또는 supertest로 교체
   // const res = await fetch('/api/script', { method: 'POST', body: JSON.stringify(body) });
   // const data = await res.json();
@@ -102,19 +102,18 @@ describe("POST /api/script — AC-1 [P0]: 유효 요청 성공", () => {
 // ============================================================================
 
 describe("POST /api/script — AC-2 [P1]: situation 검증 실패 → 400", () => {
-  it("AC-2.1: situation 공란 → 400 {code, message}", async () => {
+  it("AC-2.1: situation 공란 → 400 {error}", async () => {
     const res = await callScriptApi({
       situation: "",
       tone: "정중하게",
     });
 
     expect(res.status).toBe(400);
-    expect(res.data).toHaveProperty("code");
-    expect(res.data).toHaveProperty("message");
-    expect((res.data as ApiError).message).toContain("상황");
+    expect(res.data).toHaveProperty("error");
+    expect((res.data as unknown as ApiError).error).toContain("상황");
   });
 
-  it("AC-2.2: situation 301자 초과 → 400 {code, message}", async () => {
+  it("AC-2.2: situation 301자 초과 → 400 {error}", async () => {
     const tooLong = "취".repeat(301); // 301자
     const res = await callScriptApi({
       situation: tooLong,
@@ -122,8 +121,7 @@ describe("POST /api/script — AC-2 [P1]: situation 검증 실패 → 400", () =
     });
 
     expect(res.status).toBe(400);
-    expect((res.data as ApiError).code).toBeTruthy();
-    expect((res.data as ApiError).message).toContain("상황");
+    expect((res.data as unknown as ApiError).error).toContain("상황");
   });
 
   it("AC-2.3: situation null → 400", async () => {
@@ -141,15 +139,14 @@ describe("POST /api/script — AC-2 [P1]: situation 검증 실패 → 400", () =
 // ============================================================================
 
 describe("POST /api/script — AC-3 [P1]: tone 검증 실패 → 400", () => {
-  it("AC-3.1: tone 미허용('formal' 등) → 400 {code, message}", async () => {
+  it("AC-3.1: tone 미허용('formal' 등) → 400 {error}", async () => {
     const res = await callScriptApi({
       situation: "테스트",
       tone: "formal" as any,
     });
 
     expect(res.status).toBe(400);
-    expect((res.data as ApiError).code).toBeTruthy();
-    expect((res.data as ApiError).message).toContain("tone");
+    expect((res.data as unknown as ApiError).error).toContain("tone");
   });
 
   it("AC-3.2: tone 공란 → 400", async () => {
@@ -312,7 +309,7 @@ describe("POST /api/script — AC-7 [P1]: 응답 구조 검증", () => {
 
     expect(res.status).toBeGreaterThanOrEqual(400);
 
-    const error = res.data as ApiError;
+    const error = res.data as ServerApiError;
     expect(typeof error.code).toBe("string");
     expect(typeof error.message).toBe("string");
     expect(error.code).toBeTruthy();

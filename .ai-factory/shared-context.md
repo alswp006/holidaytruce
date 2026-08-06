@@ -111,13 +111,11 @@ export interface ScriptRequest {
 
 export interface ScriptResponse {
   result: string;
-  id: string;
-  createdAt: number;
+  model: string;
 }
 
 export interface ApiError {
-  code: number;
-  message: string;
+  error: string;
 }
 
 // Route state union
@@ -200,3 +198,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0002: localStorage CRUD 헬퍼 + 방어 로직 (files: src/lib/storage.ts)
 - 0003: 명절 컨텍스트 + meta 상태 관리 (files: src/lib/HolidayContext.tsx, src/lib/meta.ts)
+- 0004: 백엔드 스캐폴딩 + CORS + 헬스체크 (files: server/package.json, server/src/index.ts, server/.env.example)
