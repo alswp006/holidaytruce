@@ -1,0 +1,23 @@
+{
+  "koreanName": "명절휴전",
+  "englishName": "HolidayTruce",
+  "appName": "holiday-truce",
+  "ageRating": "전체",
+  "supportEmail": "support@aifactory.dev",
+  "category": {
+    "primary": "생활",
+    "secondary": "가정"
+  },
+  "subtitle": "시댁 응대법과 예산 계획",
+  "description": "설날 앞두고 앱을 열어 시댁 방문 일정을 입력하면 AI가 시댁 인사말 스크립트를 추천해줍니다. 캘린더에서 본가와 처가 방문 날짜를 표시하면 불공정한 일정을 경고합니다. 용돈과 선물 예산을 입력하면 부부가 동의한 범위 내에서 항목별 예산을 자동 배분해줍니다. 명절이 지난 후 감정소진도를 기록하면 다음 명절을 위한 개선 리포트를 받을 수 있습니다.",
+  "searchKeywords": [
+    "명절 스트레스",
+    "시댁 응대",
+    "명절 예산 관리",
+    "며느리 우울증",
+    "설날 추석 준비",
+    "가족 관계 관리",
+    "명절 일정 조율",
+    "부부 싸움 방지"
+  ]
+}
