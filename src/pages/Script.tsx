@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Top,
   TextField,
@@ -11,15 +12,32 @@ import {
   Paragraph,
   Spacing,
   FixedBottomCTA,
+  BottomSheet,
+  Button,
 } from "@toss/tds-mobile";
 import { generateHapticFeedback } from "@apps-in-toss/web-framework";
 import { ScreenScaffold } from "@/components/ScreenScaffold";
 import { Card } from "@/components/Card";
 import { TossRewardAd } from "@/components/TossRewardAd";
 import { useHoliday } from "@/lib/HolidayContext";
-import { addScript } from "@/lib/storage";
+import { addScript, listScripts } from "@/lib/storage";
 import { generateScript, ApiError } from "@/lib/api";
 import type { ScriptRecord, ScriptRequest } from "@/lib/types";
+
+function isSameDay(a: number, b: number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
+}
+
+function todayScriptCount(): number {
+  const now = Date.now();
+  return listScripts().filter((s) => isSameDay(s.createdAt, now)).length;
+}
 
 const TONES: ScriptRequest["tone"][] = ["정중하게", "단호하게", "유머러스하게"];
 const AD_SLOT_ID = import.meta.env.VITE_TOSS_AD_SLOT_ID ?? "script-result-unlock";
@@ -33,7 +51,8 @@ function fireHaptic(type: "success" | "tickWeak") {
 }
 
 export default function Script() {
-  const { aiNoticeAck, setAiNoticeAck } = useHoliday();
+  const navigate = useNavigate();
+  const { aiNoticeAck, setAiNoticeAck, isPaid } = useHoliday();
 
   const [situation, setSituation] = useState("");
   const [tone, setTone] = useState<ScriptRequest["tone"]>(TONES[0]);
@@ -43,6 +62,7 @@ export default function Script() {
   const [result, setResult] = useState<ScriptRecord | null>(null);
   const [toast, setToast] = useState<{ open: boolean; text: string }>({ open: false, text: "" });
   const [noticeOpen, setNoticeOpen] = useState(() => !aiNoticeAck);
+  const [limitSheetOpen, setLimitSheetOpen] = useState(false);
 
   function handleToneSelect(next: ScriptRequest["tone"]) {
     setTone(next);
@@ -55,6 +75,11 @@ export default function Script() {
     const trimmed = situation.trim();
     if (!trimmed) {
       setSituationError("상황을 입력해주세요");
+      return;
+    }
+
+    if (!isPaid && todayScriptCount() >= 1) {
+      setLimitSheetOpen(true);
       return;
     }
 
@@ -159,6 +184,28 @@ export default function Script() {
         text={toast.text}
         onClose={() => setToast((t) => ({ ...t, open: false }))}
       />
+
+      <BottomSheet
+        open={limitSheetOpen}
+        onDimmerClick={() => setLimitSheetOpen(false)}
+        header="무료 이용 한도"
+      >
+        <Paragraph.Text typography="t5">
+          무료 이용은 하루 1회예요. 시즌권으로 무제한 이용하세요
+        </Paragraph.Text>
+        <Spacing size={20} />
+        <Button
+          variant="fill"
+          display="block"
+          data-testid="script-limit-paywall-button"
+          onClick={() => {
+            setLimitSheetOpen(false);
+            navigate("/paywall");
+          }}
+        >
+          시즌권 보기
+        </Button>
+      </BottomSheet>
     </ScreenScaffold>
   );
 }
