@@ -114,8 +114,15 @@ export interface ScriptResponse {
   model: string;
 }
 
+// 클라이언트 API 에러 응답 (단순)
 export interface ApiError {
   error: string;
+}
+
+// 서버 에러 응답 (더 상세)
+export interface ServerApiError {
+  code: string;
+  message: string;
 }
 
 // Route state union
@@ -199,3 +206,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0002: localStorage CRUD 헬퍼 + 방어 로직 (files: src/lib/storage.ts)
 - 0003: 명절 컨텍스트 + meta 상태 관리 (files: src/lib/HolidayContext.tsx, src/lib/meta.ts)
 - 0004: 백엔드 스캐폴딩 + CORS + 헬스체크 (files: server/package.json, server/src/index.ts, server/.env.example)
+- 0006: 스크립트 생성 API 클라이언트 (files: src/lib/api.ts)
