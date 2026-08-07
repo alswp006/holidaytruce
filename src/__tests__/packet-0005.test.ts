@@ -186,7 +186,7 @@ describe("스크립트 생성 API 클라이언트 (requestScript)", () => {
     });
 
     it("should NOT call console.error on network error", async () => {
-      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       global.fetch = vi.fn().mockRejectedValueOnce(
         new Error("Network connection lost")
@@ -246,7 +246,7 @@ describe("스크립트 생성 API 클라이언트 (requestScript)", () => {
     });
 
     it("should NOT call console.error on 400 error", async () => {
-      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       global.fetch = vi.fn().mockResolvedValueOnce(
         new Response(JSON.stringify({ error: "Bad request" }), { status: 400 })
@@ -349,7 +349,7 @@ describe("스크립트 생성 API 클라이언트 (requestScript)", () => {
     });
 
     it("should NOT call console.error on 500 error", async () => {
-      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       global.fetch = vi.fn().mockResolvedValueOnce(
         new Response(JSON.stringify({ error: "Server error" }), { status: 500 })

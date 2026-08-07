@@ -123,6 +123,8 @@ export interface AppFlags {
 export interface Holiday {
   id: string;
   name: string;
+  /** "YYYY-MM-DD" 양력 날짜 — D-day 계산 등에 사용 */
+  date?: string;
 }
 
 // ============================================================================
@@ -246,3 +248,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 엔티티 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
+- 0002: localStorage CRUD 헬퍼 + 명절 상수 테이블 (files: src/lib/storage.ts, src/lib/holidays.ts)
