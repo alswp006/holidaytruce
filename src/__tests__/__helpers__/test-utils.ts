@@ -92,3 +92,14 @@ export function mockFetchOnce(response: unknown, options?: { status?: number; ok
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   return fetchMock;
 }
+
+// ── localStorage QuotaExceededError injection helper ──
+// Force QuotaExceededError on next localStorage.setItem call.
+// Usage: forceQuotaExceeded(); storage.setItem("key", "value"); // throws
+export function forceQuotaExceededError() {
+  const g = globalThis as any;
+  if (typeof g.__forceQuotaExceeded !== "function") {
+    throw new Error("QuotaExceededError injection not available — ensure vitest.setup.ts loads");
+  }
+  return g.__forceQuotaExceeded();
+}

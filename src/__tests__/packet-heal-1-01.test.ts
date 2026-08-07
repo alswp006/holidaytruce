@@ -118,7 +118,7 @@ describe("AC-1: Global Mocking & Harness Setup", () => {
   });
 
   it("AC-1.6: Monetization components (TossRewardAd, TossPurchase, AdSlot) are mocked to fire callbacks immediately", async () => {
-    const { TossRewardAd } = await import("@/components/TossRewardAd").catch(() => ({}));
+    const { TossRewardAd } = await import("@/components/TossRewardAd").catch(() => ({}) as any);
 
     if (TossRewardAd) {
       const onRewardMock = vi.fn();
@@ -175,7 +175,7 @@ describe("AC-2: Test Harness Reusability & Thrashing Prevention", () => {
       encoding: "utf8",
     }).trim();
 
-    expect(output).toBe("", "Found temporary debug test files that should not be in repo");
+    expect(output).toBe("");
   });
 
   it("AC-2.4: Agent execution rules enforce: one packet = one screen scope", () => {
@@ -242,8 +242,8 @@ describe("AC-3: Production Build Quality Checks", () => {
     expect(grantPromotionReward).toBeDefined();
 
     // Calling it should not crash and should be tracked
-    grantPromotionReward({ promotionCode: "TEST", amount: 1000 });
-    expect(grantPromotionReward).toHaveBeenCalledWith({ promotionCode: "TEST", amount: 1000 });
+    grantPromotionReward({ params: { promotionCode: "TEST", amount: 1000 } });
+    expect(grantPromotionReward).toHaveBeenCalledWith({ params: { promotionCode: "TEST", amount: 1000 } });
   });
 
   it("AC-3.5: No external domain navigation in test (SDK openURL is mocked)", async () => {

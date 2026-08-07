@@ -21,8 +21,8 @@ import { getDday, getHolidayById } from "@/lib/holidays";
 import type { AppFlags } from "@/lib/types";
 import "@/styles/home-purchase.css";
 
-const AD_GROUP_ID = (import.meta.env.VITE_TOSS_AD_GROUP_ID as string | undefined) ?? "holidaytruce-home-banner";
-const IAP_SKU = (import.meta.env.VITE_TOSS_IAP_SKU as string | undefined) ?? "holidaytruce-premium-season";
+const AD_GROUP_ID = (import.meta.env?.VITE_TOSS_AD_GROUP_ID as string | undefined) ?? "holidaytruce-home-banner";
+const IAP_SKU = (import.meta.env?.VITE_TOSS_IAP_SKU as string | undefined) ?? "holidaytruce-premium-season";
 
 // Card 내 ListRow.Texts 인라인 서브텍스트 — 전체 섹션 EmptyState(StateView)가 아니라
 // 요약 카드 한 줄 라벨이라 packet-0007 테스트 계약(getAllByText)과 일치해야 함.

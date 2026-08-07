@@ -13,45 +13,38 @@
  * 타입을 그대로 가정해도 된다. 추측이 어긋나 병합에서 무너지는 것을 막기 위한 파일이다.
  */
 
-export type User = { id: string; name: string; email?: string };
+export type RouteState = { path: string; query?: Record<string, unknown> };
 
-export type FamilyMember = { id: string; name: string; relationship?: string };
+export type User = { id: string; name: string; email?: string; tossLinked?: boolean };
 
-export type Schedule = { id: string; date: string; memberId: string; notes?: string };
+export type MoodEntry = { id: string; date: string; mood: number; note?: string; createdAt?: string };
 
-export type Mood = { id: string; date: string; level: number; notes?: string };
+export type VisitRecord = { id: string; date: string; person: string; minutes: number };
 
-export type Budget = { id: string; month: string; category: string; amount: number; spent?: number };
+export type Budget = { id: string; category: string; amountKrw: number; period: 'daily' | 'monthly'; date: string };
 
-export type getUserFn = () => User | null;
+export type Script = { id: string; title: string; content: string; createdAt: string; usage?: number };
 
-export type saveUserFn = (user: User) => void;
+export type getStorageFn = <T = unknown>(key: string) => T | null;
 
-export type getFamilyMembersFn = () => FamilyMember[];
+export type setStorageFn = <T = unknown>(key: string, value: T) => void;
 
-export type saveFamilyMembersFn = (members: FamilyMember[]) => void;
+/** Map of 'YYYY-MM-DD' to holiday name (구현: 패킷 0002) */
+export type HOLIDAYS = Record<string, string>;
 
-export type getSchedulesFn = (date?: string) => Schedule[];
+export type useAppDataFn = () => { user: User | null; moods: MoodEntry[]; visits: VisitRecord[]; budgets: Budget[]; scripts: Script[]; isLoading: boolean };
 
-export type saveSchedulesFn = (schedules: Schedule[]) => void;
+export type calculateMoodStatsFn = (entries: MoodEntry[]) => { average: number; trend: number; count: number };
 
-export type getMoodsFn = () => Mood[];
+export type calculateVisitBalanceFn = (records: VisitRecord[], range: [string, string]) => { totalDays: number; totalMinutes: number; daysWithVisits: number };
 
-export type saveMoodsFn = (moods: Mood[]) => void;
+export type initTossSessionFn = () => Promise<{ success: boolean; message?: string }>;
 
-export type getBudgetsFn = () => Budget[];
+export type getTossSessionTokenFn = () => string | null;
 
-export type saveBudgetsFn = (budgets: Budget[]) => void;
+export type generateScriptFn = (prompt: string, context?: { person?: string; relationship?: string }) => Promise<Script>;
 
-export type getHolidaysFn = (year: number) => { date: string; name: string }[];
-
-export type useAppDataFn = () => { user: User | null; familyMembers: FamilyMember[]; schedules: Schedule[]; moods: Mood[]; budgets: Budget[] };
-
-export type getTossSessionFn = () => string | null;
-
-export type setTossSessionFn = (token: string) => void;
-
-export type createScriptFn = (params: any) => Promise<{ scriptId: string; content: string }>;
+export type navigateToFn = (path: string, opts?: { replace?: boolean; query?: Record<string, unknown> }) => void;
 
 ```
 
@@ -222,6 +215,9 @@ export type RouteState = {
     CalendarPage.tsx
     Home.tsx
     HomePage.tsx
+    MoodNewPage.tsx
+    ReportPage.tsx
+    ScriptPage.tsx
     ScriptResultPage.tsx
     SetupPage.tsx
     __TdsGallery.tsx
@@ -268,6 +264,9 @@ export type RouteState = {
   pages/BudgetPage.tsx → imports: components/ScreenScaffold, components/SummaryHero, components/CountUp, components/Card, components/MiniBar, components/StateView, lib/storage, lib/useAppData, lib/utils, lib/types
   pages/CalendarPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, components/Card, components/MiniBar, components/StateView, lib/storage, lib/useAppData, lib/types
   pages/HomePage.tsx → imports: components/ScreenScaffold, components/SummaryHero, components/Card, components/Amount, components/MiniBar, components/AdSlot, components/TossPurchase, lib/storage, lib/useAppData, lib/holidays, lib/types
+  pages/MoodNewPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, lib/storage, lib/types, lib/types
+  pages/ReportPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, components/SummaryHero, components/Amount, components/Sparkline, components/StateView, lib/storage, lib/useAppData
+  pages/ScriptPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, components/Card, components/StateView, components/TossRewardAd, lib/storage, lib/scriptApi, lib/useAppData, lib/types, lib/types
   pages/ScriptResultPage.tsx → imports: components/ScreenScaffold, components/Card, lib/storage, lib/types
   pages/SetupPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, components/StateView, lib/storage, lib/holidays, lib/types
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
@@ -275,5 +274,5 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 엔티티 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
 - 0002: localStorage CRUD 헬퍼 + 명절 상수 테이블 (files: src/lib/storage.ts, src/lib/holidays.ts)
-- 0005: 스크립트 생성 API 클라이언트 (files: src/lib/scriptApi.ts)
 - 0003: 앱 상태 훅 + 파생 집계 함수 (files: src/lib/useAppData.ts)
+- 0005: 스크립트 생성 API 클라이언트 (files: src/lib/scriptApi.ts)

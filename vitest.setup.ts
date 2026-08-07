@@ -6,6 +6,15 @@
  *  - requestAnimationFrame shim for jsdom (needed for animate/countup utilities)
  *  - sessionStorage isolation
  *  - console.error filtering (React Router warnings etc.)
+ *
+ * Agent execution rules (스레싱 방지 — see also src/__tests__/packet-heal-1-01.test.ts AC-2):
+ *  - 임시 디버그 테스트 파일 생성 금지: `zzz-*.test.ts` / `*tmp-debug*.test.ts` 같은
+ *    일회성 확인용 파일을 src/__tests__/에 만들지 마라. 확인은 기존 packet-NNN.test.ts
+ *    안에서 하거나, 만들었다면 확인 직후 반드시 지우고 커밋에 남기지 마라.
+ *  - 기존 테스트만 실행: `npx vitest run`으로 전체 스위트를 돌려라. 새 스크래치 파일을
+ *    만들어 개별 실행하지 마라.
+ *  - 한 패킷 = 한 화면(또는 공유 인프라 하나) 스코프: 다른 패킷 소유 화면의 실패 테스트를
+ *    발견해도 스코프 밖이면 고치지 말고 보고만 하라 — 병합 충돌·중복 수정을 막는다.
  */
 
 import { beforeEach, afterEach, vi } from "vitest";
@@ -141,15 +150,20 @@ function makeStorageStub(real: Storage): Storage {
   Object.defineProperty(stub, "length", { get: () => real.length, enumerable: true });
   return stub as unknown as Storage;
 }
-Object.defineProperty(globalThis, "localStorage", {
-  value: makeStorageStub(globalThis.localStorage),
-  writable: true,
-  configurable: true,
-});
+const realLocalStorage = globalThis.localStorage;
 
 // ── localStorage / sessionStorage isolation ──
 // jsdom's storage persists between tests by default. Clear it to prevent pollution.
+// Also re-install a fresh stub each test: a prior test may have overwritten a method
+// (e.g. `localStorage.setItem = someMock`, or the QuotaExceededError injection helper)
+// directly on the stub instance — since it's a plain object shared across the file,
+// that mutation would otherwise leak into every later test.
 beforeEach(() => {
+  Object.defineProperty(globalThis, "localStorage", {
+    value: makeStorageStub(realLocalStorage),
+    writable: true,
+    configurable: true,
+  });
   localStorage.clear();
   sessionStorage.clear();
 });
@@ -165,6 +179,38 @@ if (typeof globalThis.requestAnimationFrame !== "function") {
   }) as typeof globalThis.requestAnimationFrame;
   globalThis.cancelAnimationFrame = ((id: number) => clearTimeout(id)) as typeof globalThis.cancelAnimationFrame;
 }
+
+// ── window.matchMedia polyfill for jsdom ──
+// jsdom does NOT implement matchMedia natively, so CSS-in-JS (TDS, emotion, etc.)
+// queries for dark mode, reduced-motion, etc. always return false.
+// Provide a minimal working stub.
+if (typeof globalThis.matchMedia !== "function") {
+  globalThis.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => true,
+  })) as typeof globalThis.matchMedia;
+}
+
+// ── localStorage QuotaExceededError injection helper ──
+// Test helper to simulate quota exceeded. Expose via globalThis for test access.
+(globalThis as any).__forceQuotaExceeded = () => {
+  const originalSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function (key: string, value: string) {
+    const err = new Error("QuotaExceededError");
+    (err as any).name = "QuotaExceededError";
+    (err as any).code = 22; // DOM_EXCEPTION_QUOTA_EXCEEDED_ERR
+    throw err;
+  };
+  return () => {
+    localStorage.setItem = originalSetItem;
+  };
+};
 
 // ── afterEach reset ──
 afterEach(() => {
