@@ -37,7 +37,67 @@ ModuleWithInternals._resolveFilename = function (request: string, ...rest: unkno
       }
     }
   }
-  return originalResolveFilename.call(this, request, ...rest);
+  try {
+    return originalResolveFilename.call(this, request, ...rest);
+  } catch (err) {
+    // Relative extension-less requests (e.g. `require("../lib/utils")` from a component
+    // reached via the "@/pages/..." require() chain) aren't resolved by Node's default
+    // require.extensions map (only .js/.json/.node) — retry with .ts/.tsx appended.
+    if (request.startsWith(".")) {
+      for (const ext of [".ts", ".tsx"]) {
+        try {
+          return originalResolveFilename.call(this, request + ext, ...rest);
+        } catch {
+          // try next candidate
+        }
+      }
+    }
+    throw err;
+  }
+};
+
+// ── Bridge vi.mock() into require()-loaded pages ──
+// Some page tests dynamically `require("@/pages/...")` a page (TDD red-phase trick —
+// see those test files for why). That page's own `import ... from "react-router-dom"` /
+// "@toss/tds-mobile" / "@apps-in-toss/web-framework" / "@/lib/storage" etc. get compiled to
+// `require(...)` calls too (see the `.tsx`/`.ts` extension handlers below) — real Node
+// `require()`, which resolves from disk and has NO knowledge of `vi.mock()` (that only
+// intercepts Vite/vite-node's ESM module graph). Left unbridged, a required page always
+// gets the REAL react-router-dom hooks / REAL @toss/tds-mobile (crashes: "ThemeProvider로
+// 감싸야 합니다") / REAL (empty) storage — regardless of what the test mocked.
+// Fix: before each test, `import()` the specifiers pages commonly depend on — that import
+// goes through Vite's normal SSR module graph and DOES resolve to whatever the test's
+// `vi.mock()` registered (or the real module, if unmocked) — then serve requests for those
+// exact specifiers straight from this cache in the `Module._load` override below.
+const REQUIRE_BRIDGE_SPECIFIERS = [
+  "react-router-dom",
+  "@toss/tds-mobile",
+  "@apps-in-toss/web-framework",
+  "@/lib/storage",
+  "@/lib/scriptApi",
+  "@/components/TossRewardAd",
+];
+let requireBridgeCache: Record<string, unknown> = {};
+beforeEach(async () => {
+  const cache: Record<string, unknown> = {};
+  for (const specifier of REQUIRE_BRIDGE_SPECIFIERS) {
+    try {
+      cache[specifier] = await import(/* @vite-ignore */ specifier);
+    } catch {
+      // Not resolvable from this test file's context — real require() fallback handles it.
+    }
+  }
+  requireBridgeCache = cache;
+});
+const ModuleWithLoad = Module as unknown as {
+  _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+};
+const originalLoad = ModuleWithLoad._load;
+ModuleWithLoad._load = function (request: string, parent: unknown, isMain: boolean) {
+  if (Object.prototype.hasOwnProperty.call(requireBridgeCache, request)) {
+    return requireBridgeCache[request];
+  }
+  return originalLoad.call(this, request, parent, isMain);
 };
 
 // ── .tsx require() support (Node's native type-stripping doesn't cover .tsx) ──
