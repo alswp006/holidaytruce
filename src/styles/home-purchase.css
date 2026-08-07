@@ -1,0 +1,17 @@
+.toss-purchase-button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 12px;
+  background-color: var(--adaptiveGrey100);
+  color: var(--adaptiveGrey800);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toss-purchase-button[aria-busy="true"] {
+  color: var(--adaptiveGrey500);
+}

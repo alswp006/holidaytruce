@@ -214,13 +214,19 @@ export type RouteState = {
     scriptApi.ts
     storage.ts
     types.ts
+    useAppData.ts
     utils.ts
   main.tsx
   pages/
     Home.tsx
+    HomePage.tsx
+    SetupPage.tsx
     __TdsGallery.tsx
+    __chiptest.tsx
+    __noJsxTest.tsx
   styles/
     globals.css
+    home-purchase.css
     reward-ad.css
   types/
   vite-env.d.ts
@@ -231,6 +237,7 @@ export type RouteState = {
 - scriptApi.ts: export async function requestScript( req: ScriptRequest ): Promise<
 - storage.ts: export type WriteResult =; export function uuid(): string; export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): WriteResult; export function removeItem(key: string): void; export function getCouple(): Couple | null; export function saveCouple(couple: Couple): WriteResult; export function getVisits(): Visit[]
 - types.ts: export interface Couple; export interface Visit; export interface BudgetItem; export interface ChecklistItem; export interface Script; export interface MoodLog; export interface AppFlags; export interface Holiday
+- useAppData.ts: export function useAppData(); export function calcBalance(visits: Visit[]):; export function calcBudget( items: BudgetItem[], ):; export function calcChecklistProgress( items: ChecklistItem[], ):; export function calcMoodReport( logs: MoodLog[], ):; export function isPremium(flags: AppFlags | null, activeHolidayId: string): boolean; export function acknowledgeAiNotice(): void; export function setActiveHoliday(id: string): void
 - utils.ts: export function cn(...classes: (string | boolean | undefined | null)[]): string; export function formatNumber(n: number): string; export function formatCurrency(n: number, currency = 'KRW'): string
 
 ### Components (src/components/)
@@ -253,9 +260,12 @@ export type RouteState = {
   lib/holidays.ts → imports: lib/types
   lib/scriptApi.ts → imports: lib/types
   lib/storage.ts → imports: lib/types
+  pages/HomePage.tsx → imports: components/ScreenScaffold, components/SummaryHero, components/Card, components/Amount, components/MiniBar, components/AdSlot, components/TossPurchase, lib/storage, lib/useAppData, lib/holidays, lib/types
+  pages/SetupPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, components/StateView, lib/storage, lib/holidays, lib/types
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
 
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 엔티티 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
 - 0002: localStorage CRUD 헬퍼 + 명절 상수 테이블 (files: src/lib/storage.ts, src/lib/holidays.ts)
 - 0005: 스크립트 생성 API 클라이언트 (files: src/lib/scriptApi.ts)
+- 0003: 앱 상태 훅 + 파생 집계 함수 (files: src/lib/useAppData.ts)
