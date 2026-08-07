@@ -1,0 +1,548 @@
+[
+  {
+    "id": "0001",
+    "title": "엔티티 타입 + RouteState 계약 정의",
+    "epic": "Epic 1. Data Layer",
+    "task": {
+      "description": "SPEC Data Models의 전 엔티티(Couple, Visit, BudgetItem, ChecklistItem, Script, MoodLog, AppFlags)와 API 계약(ScriptRequest, ScriptResponse, ApiError), 명절 상수용 Holiday 타입, 모든 라우트의 location.state 계약인 RouteState 타입을 순수 타입으로 선언한다. situation/tone/stressTags 프리셋 유니온과 상수 배열도 export. 런타임 로직 없음(타입/상수 선언만).",
+      "acceptance_criteria": [
+        "모든 엔티티 인터페이스가 SPEC 필드/유니온과 1:1 일치하고 tsc --noEmit 통과",
+        "RouteState 타입에 '/','/setup','/script','/script/result'({scriptId:string}),'/calendar','/budget','/report','/report/new' 키가 모두 정의됨",
+        "SITUATIONS, TONES, STRESS_TAGS 상수 배열과 대응 유니온 타입 export"
+      ]
+    },
+    "covers": [
+      "F2-AC결과계약(S4)",
+      "F1-AC7"
+    ],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "Couple.myRole 유니온이 '며느리'|'사위'|'아내'|'남편'",
+      "Visit.family='mine'|'partner', BudgetItem.category='용돈'|'선물'|'교통'|'기타'",
+      "Script.isAi:true 상수, MoodLog.exhaustionLevel:number(1~5)",
+      "AppFlags에 aiNoticeAcknowledged, activeHolidayId, purchasedHolidays 포함",
+      "tone 유니온 '정중하게'|'단호하게'|'유머러스하게'"
+    ],
+    "depends_on": [],
+    "db_schema": "interface Couple { id:string; myRole:'며느리'|'사위'|'아내'|'남편'; myFamilyLabel:string; partnerFamilyLabel:string; createdAt:number } / interface Script { id:string; situation:string; tone:'정중하게'|'단호하게'|'유머러스하게'; question:string; resultText:string; createdAt:number; isAi:true } → localStorage keys: ht_couple, ht_visits, ht_budget, ht_checklist, ht_scripts, ht_moodlogs, ht_flags",
+    "api_contract": "type ScriptRequest = { situation:string; tone:string; question:string } | type ScriptResponse = { reply:string } | type ApiError = { code:number }",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "localStorage CRUD 헬퍼 + 명절 상수 테이블",
+    "epic": "Epic 1. Data Layer",
+    "task": {
+      "description": "7개 키(ht_couple/ht_visits/ht_budget/ht_checklist/ht_scripts/ht_moodlogs/ht_flags)에 대한 read/write 헬퍼와 배열 엔티티 add/update/remove를 구현. 모든 write는 QuotaExceededError를 try/catch로 잡아 {ok:boolean; reason?:'quota'} 반환. JSON.parse 실패 시 throw 없이 기본값 fallback. uuid 생성 유틸 포함. 명절 상수 테이블(HOLIDAYS: Holiday[], 설/추석 양력)을 별도 파일로 정의하며 외부 API 미호출.",
+      "acceptance_criteria": [
+        "getCouple/saveCouple, getVisits/addVisit/removeVisit, getBudget/addBudgetItem, getChecklist/toggleChecklist, getScripts/addScript, getMoodLogs/addMoodLog, getFlags/saveFlags 구현",
+        "JSON.parse 실패 시 throw 없이 기본값 반환, write 실패 시 console.error 미사용하고 {ok:false,reason:'quota'} 반환",
+        "HOLIDAYS 상수 배열에 2026 설날·추석 양력 날짜 포함, 외부 fetch 0건"
+      ]
+    },
+    "covers": [
+      "F1-AC5",
+      "F6-AC5",
+      "F6-AC7"
+    ],
+    "files": [
+      "src/lib/storage.ts",
+      "src/lib/holidays.ts"
+    ],
+    "definition_of_done": [
+      "모든 write 함수가 {ok:boolean; reason?:'quota'} 반환",
+      "uuid() 유틸이 crypto 기반으로 충돌 없는 id 생성",
+      "프로덕션 빌드에서 console.error 호출 0개",
+      "tsc --noEmit 통과, types.ts 타입만 import"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "localStorage keys: ht_couple(Couple), ht_visits(Visit[]), ht_budget(BudgetItem[]), ht_checklist(ChecklistItem[]), ht_scripts(Script[]), ht_moodlogs(MoodLog[]), ht_flags(AppFlags); HOLIDAYS: Holiday[] 내장 상수",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "앱 상태 훅 + 파생 집계 함수",
+    "epic": "Epic 1. Data Layer",
+    "task": {
+      "description": "storage 헬퍼를 감싸 로딩 상태·라벨 해석·파생 집계를 제공하는 경량 훅. useAppData()가 {loading,couple,flags,visits,budget,checklist,scripts,moodLogs}를 반환. Couple 라벨(본가/시댁)을 단일 소스로 노출. 균형지표/예산총액·비율/체크리스트 진행률/소진추이 순수 계산 함수와 프리미엄·AI고지·활성명절 헬퍼 제공.",
+      "acceptance_criteria": [
+        "useAppData()가 초기 로드 중 loading=true 반환 후 전 엔티티 노출",
+        "calcBalance(visits)→{minePct,partnerPct}, calcBudget(items)→{total,minePct,partnerPct}, calcChecklistProgress, calcMoodReport(logs)→{avg,trend[],topTags[]} 순수 함수 export",
+        "isPremium(flags,activeHolidayId), acknowledgeAiNotice(), setActiveHoliday(), isImbalanced(70% 초과 판정) 제공"
+      ]
+    },
+    "covers": [
+      "F3-AC2",
+      "F3-AC3",
+      "F4-AC2",
+      "F5-AC2",
+      "F5-AC3",
+      "F6-AC3"
+    ],
+    "files": [
+      "src/lib/useAppData.ts"
+    ],
+    "definition_of_done": [
+      "calcBalance가 본가 4h/시댁 12h 입력 시 minePct=25,partnerPct=75 반환",
+      "isImbalanced가 한쪽 70% 초과 시 true 반환",
+      "순수 함수는 부수효과·localStorage 접근 없음",
+      "tsc --noEmit 통과"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "토스 세션/통합 상태 안전 래퍼",
+    "epic": "Epic 1. Data Layer",
+    "task": {
+      "description": "SPEC 인증 원칙을 코드로 배선. 로그인/세션 획득 함수는 호출하지 않고 통합 여부만 조회하는 안전 래퍼 제공. getIsTossLoginIntegratedService()를 @apps-in-toss/web-framework에서 import 후 try/catch로 감싸 비토스 환경/미지원/throw를 모두 흡수, 실패 시 {integrated:false}로 정규화해 부팅을 막지 않는다. 통합 상태는 UI 게이팅에 쓰지 않고 진단/비차단 신호로만 노출.",
+      "acceptance_criteria": [
+        "getTossIntegration(): Promise<{integrated:boolean}> 구현, 실패/미지원/throw 시 {integrated:false} 반환하고 throw·console.error 없음",
+        "useTossIntegration() 훅이 {checked,integrated} 반환, 조회 전 checked=false, 결과와 무관하게 앱 렌더 비차단",
+        "별도 로그인/세션 획득 함수 호출 코드 0건, 통합 false여도 모든 기능 정상 동작"
+      ]
+    },
+    "covers": [
+      "Common: 인증(토스 세션 자동 제공, 통합 상태만 확인)"
+    ],
+    "files": [
+      "src/lib/tossSession.ts"
+    ],
+    "definition_of_done": [
+      "getIsTossLoginIntegratedService 호출이 try/catch로 감싸짐",
+      "어떤 경로도 무한 로딩·크래시 없음",
+      "tsc --noEmit 통과"
+    ],
+    "depends_on": [],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0005",
+    "title": "스크립트 생성 API 클라이언트",
+    "epic": "Epic 2. API Route",
+    "task": {
+      "description": "POST /api/script 호출 클라이언트. ScriptRequest 전송, 200이면 {ok:true,data:ScriptResponse}, 비200/네트워크 오류면 {ok:false} 반환. URL은 import.meta.env.VITE_SCRIPT_API_URL(https)만 사용하며 fetch를 try/catch로 감싸 console.error 미출력. CORS 기본 모드로 호출해 콘솔 CORS 에러 0을 목표로 한다.",
+      "acceptance_criteria": [
+        "requestScript(req:ScriptRequest): Promise<{ok:true;data:ScriptResponse}|{ok:false}> 구현",
+        "400/429/500 및 네트워크 오류를 모두 {ok:false}로 정규화하고 throw 없음",
+        "URL은 VITE_SCRIPT_API_URL(https) 사용, CORS 기본 모드"
+      ]
+    },
+    "covers": [
+      "F2-AC5",
+      "F2-AC8"
+    ],
+    "files": [
+      "src/lib/scriptApi.ts"
+    ],
+    "definition_of_done": [
+      "fetch 오류·비200 모두 {ok:false} 반환, throw 없음",
+      "console.error 호출 0개",
+      "types.ts의 ScriptRequest/ScriptResponse 타입 사용",
+      "tsc --noEmit 통과"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "POST {VITE_SCRIPT_API_URL}/api/script {situation:string, tone:string, question:string} → 200 {reply:string} | errors: 400/429/500/network → {ok:false}",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0006",
+    "title": "초기 설정 페이지 `/setup`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "역할/가족 호칭/대상 명절을 설정하고 저장하는 초기 설정 화면. ScreenScaffold + Top + 역할·명절 Chip + 호칭 TextField + FixedBottomCTA Button 구성. 저장 성공 시 토스트 후 홈으로 replace 이동. 빈 호칭·QuotaExceededError·로딩 상태를 모두 처리한다. 프로모션 UI는 노출하지 않는다.",
+      "acceptance_criteria": [
+        "{ myRole, myFamilyLabel, partnerFamilyLabel } 제출 시 ht_couple 저장, 토스트 \"설정이 저장되었어요\" 후 navigate('/', {replace:true})",
+        "명절 Chip 탭 시 ht_flags.activeHolidayId 저장 (예: 2026-chuseok)",
+        "빈 호칭 제출 시 TextField hasError + help \"호칭을 입력해주세요\", 저장 차단",
+        "QuotaExceededError 시 AlertDialog \"저장 공간이 부족해요. 기록을 정리해주세요\", 크래시 없음",
+        "로드 중 스켈레톤 표시, 이미 설정됨이면 /로 리다이렉트, 프로모션 관련 UI 미노출"
+      ]
+    },
+    "covers": [
+      "F1-AC1",
+      "F1-AC2",
+      "F1-AC4",
+      "F1-AC5",
+      "F1-AC6",
+      "F1-AC7"
+    ],
+    "files": [
+      "src/pages/SetupPage.tsx"
+    ],
+    "definition_of_done": [
+      "컨테이너 data-testid=\"setup-form\", 저장 버튼 display=\"block\" 및 ≥44px",
+      "역할·명절 Chip 탭에 tickWeak, 저장 버튼에 success 햅틱",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "interface Couple { id:string; myRole:\"며느리\"|\"사위\"|\"아내\"|\"남편\"; myFamilyLabel:string; partnerFamilyLabel:string; createdAt:number } → key: ht_couple; AppFlags.activeHolidayId → key: ht_flags",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "Pattern: FixedBottomCTA. TDS: Top, Paragraph, TextField, Chip, Spacing, Button, Toast, AlertDialog. Layout:\n<Top title={<Top.TitleParagraph>기본 설정</Top.TitleParagraph>} /> <Spacing size={16}/>\n<Paragraph.Text typography=\"t4\">내 역할을 골라주세요</Paragraph.Text> <Spacing size={12}/>\n역할 Chip 4개(며느리 selected/사위/아내/남편, flex gap8 flexWrap) <Spacing size={24}/>\nTextField variant=\"box\" label=\"우리집 호칭\" help=\"예: 친정, 본가\" <Spacing size={12}/>\nTextField variant=\"box\" label=\"상대집 호칭\" hasError={err} <Spacing size={24}/>\n<Paragraph.Text typography=\"t4\">대상 명절</Paragraph.Text> <Spacing size={12}/>\n명절 Chip(2026 설날 / 2026 추석 selected, flex gap8)\nFixedBottomCTA: <Button variant=\"fill\" size=\"large\" color=\"primary\">저장하고 시작하기</Button>\nStates — Loading: ht_couple 로드 중 placeholder ListRow 스켈레톤, 미설정이면 이 화면·설정됨이면 /로 리다이렉트(AC-6). Empty: 초기 진입=빈 상태(기본값 본가/시댁 프리필). Error: 빈 호칭 시 hasError+help \"호칭을 입력해주세요\"(AC-4), QuotaExceededError 시 AlertDialog \"저장 공간이 부족해요. 기록을 정리해주세요\"(AC-5). Interactions: 역할·명절 Chip 탭→tickWeak 햅틱·선택 토글·activeHolidayId 저장; 저장 버튼→success 햅틱·검증 통과 시 ht_couple 저장+Toast(position=\"bottom\") \"설정이 저장되었어요\"→/ 이동. 여백은 TDS Spacing만, 커스텀 CSS는 flex 배치에만."
+  },
+  {
+    "id": "0007",
+    "title": "홈 대시보드 `/`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "활성 명절 D-day 히어로(SummaryHero, CountUp), 일정 균형 MiniBar, 예산 총액, 체크리스트 진행률을 요약 Card 3개+로 보여주는 대시보드. 비프리미엄 시 AdSlot 배너 배치, TossPurchase로 시즌 결제. 각 Card 탭 시 해당 탭 이동. 데이터 빈 상태 및 결제 실패 콜백 처리.",
+      "acceptance_criteria": [
+        "data-testid=\"dday-hero\" SummaryHero + data-testid=\"balance-bar\" MiniBar + 요약 Card ≥3 표시",
+        "각 Card 탭 시 /calendar, /budget, /script, /report 이동, 탭 영역 ≥44px",
+        "TossPurchase onPurchased 시 ht_flags.purchasedHolidays에 activeHolidayId 추가 + 토스트 \"프리미엄이 활성화됐어요\", 프리미엄이면 AdSlot 배너 숨김",
+        "결제 실패/취소 시 토스트 \"결제가 완료되지 않았어요\", purchasedHolidays 불변",
+        "데이터 전부 빈 경우 각 Card \"아직 데이터가 없어요\" + 이동 버튼, 파싱 실패 시 기본값 fallback console.error 0"
+      ]
+    },
+    "covers": [
+      "F6-AC1",
+      "F6-AC2",
+      "F6-AC3",
+      "F6-AC4",
+      "F6-AC5",
+      "F6-AC7"
+    ],
+    "files": [
+      "src/pages/HomePage.tsx"
+    ],
+    "definition_of_done": [
+      "요약 ListRow 탭에 tickWeak 햅틱, 활성 명절 D-day는 HOLIDAYS 상수 기준 계산",
+      "isPremium(flags, activeHolidayId) 참이면 AdSlot 미렌더",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "AppFlags { aiNoticeAcknowledged:boolean; activeHolidayId:string; purchasedHolidays:string[] } → key: ht_flags; 파생: calcBalance(visits), calcBudget(items), calcChecklistProgress",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "Pattern: StatusPanel. TDS: Top, Paragraph, Spacing, ListRow, Chip, Button, Badge. 템플릿: SummaryHero, MiniBar, AdSlot, TossPurchase, FloatingTabBar. Layout:\n<Top title={<Top.TitleParagraph>추석까지 D-48</Top.TitleParagraph>} />\n<SummaryHero label=\"2026 추석\" value={<Amount value={48} unit=\"일 남음\" typography=\"t1\"/>} caption=\"가족 균형을 준비해요\" data-testid=\"dday-hero\"/> <Spacing size={24}/>\n<Paragraph.Text typography=\"t4\">일정 균형</Paragraph.Text> <Spacing size={12}/>\nMiniBar 본가%/시댁% data-testid=\"balance-bar\"\n<ListRow contents={<ListRow.Texts type=\"2RowTypeA\" top=\"본가 4h / 시댁 12h\" bottom=\"한쪽에 몰려 있어요\"/>} right={<Chip label=\"조율 필요\" variant=\"filled\"/>} onClick={()=>nav('/calendar')}/> <Spacing size={12}/>\n<ListRow top=\"예산 총액\" bottom=\"500,000원\" onClick={()=>nav('/budget')}/>\n<ListRow top=\"체크리스트\" bottom=\"3/5 완료\" onClick={()=>nav('/budget')}/> <Spacing size={24}/>\n비프리미엄 시 <AdSlot adGroupId={import.meta.env.VITE_TOSS_AD_GROUP_ID}/> <Spacing size={16}/>\n<Button variant=\"weak\" size=\"large\">이번 명절 프리미엄</Button> (TossPurchase sku=VITE_TOSS_IAP_SKU 연결)\nStates — Loading: 각 요약 Card 자리 스켈레톤 ListRow. Empty: 데이터 없으면 각 항목 bottom \"아직 데이터가 없어요\"+해당 탭 이동 버튼. Error: 없음(로컬 집계). Interactions: 요약 ListRow 탭→tickWeak+탭 이동; 프리미엄 결제 완료 시 AdSlot 숨김. 여백은 TDS Spacing만."
+  },
+  {
+    "id": "0008",
+    "title": "응대 스크립트 입력 페이지 `/script`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "상황·톤 Chip과 곤란한 질문 TextField로 입력받아, TossRewardAd 광고 시청 후 POST /api/script를 호출하고 결과 화면으로 이동하는 입력 화면. Tab으로 만들기/기록 전환. AI 첫 이용 고지 확인, 빈 질문·API 실패·로딩·기록 빈 상태 처리.",
+      "acceptance_criteria": [
+        "ht_flags.aiNoticeAcknowledged가 false면 진입 시 AlertDialog \"이 서비스는 생성형 AI를 활용합니다\" 1회 표시, 확인 시 true 저장",
+        "만들기 버튼 탭 시 TossRewardAd 광고 시청 완료 후 requestScript 호출, ok:true면 ht_scripts 저장 + navigate('/script/result',{state:{scriptId}}) + 토스트 \"스크립트가 만들어졌어요\"",
+        "빈 질문 제출 시 hasError + help \"곤란했던 질문을 입력해주세요\", API 호출 안 됨",
+        "API 실패(ok:false) 시 AlertDialog \"잠시 후 다시 시도해주세요\" + \"다시 시도\" 버튼, 제출 중 버튼 비활성·중복 제출 차단",
+        "기록 탭에서 ht_scripts 빈 배열 시 Asset.ContentIcon + \"아직 만든 스크립트가 없어요\""
+      ]
+    },
+    "covers": [
+      "F1-AC3",
+      "F2-AC1",
+      "F2-AC2",
+      "F2-AC4",
+      "F2-AC5",
+      "F2-AC6",
+      "F2-AC7"
+    ],
+    "files": [
+      "src/pages/ScriptPage.tsx"
+    ],
+    "definition_of_done": [
+      "상황·톤 Chip 탭에 tickWeak, 만들기 버튼에 success 햅틱",
+      "requestScript는 src/lib/scriptApi.ts 사용, HTTPS env URL만 호출",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003",
+      "0005"
+    ],
+    "db_schema": "interface Script { id:string; situation:string; tone:\"정중하게\"|\"단호하게\"|\"유머러스하게\"; question:string; resultText:string; createdAt:number; isAi:true } → key: ht_scripts",
+    "api_contract": "POST /api/script { situation, tone, question } → 200 { reply:string } | 400/429/500/네트워크오류 → ok:false 정규화",
+    "dependencies": [],
+    "ui_requirements": "Pattern: FixedBottomCTA. TDS: Top, Tab, Paragraph, Chip, TextField, Spacing, Button, AlertDialog, ListRow. 템플릿: TossRewardAd, Asset.ContentIcon. Layout:\n<Top title={<Top.TitleParagraph>응대 스크립트</Top.TitleParagraph>} />\n<Tab onChange={setTab}><Tab.Item selected={tab===0}>만들기</Tab.Item><Tab.Item selected={tab===1}>기록</Tab.Item></Tab> <Spacing size={16}/>\n[만들기] <Paragraph.Text typography=\"t4\">어떤 상황인가요?</Paragraph.Text>\n상황 Chip(결혼계획질문 selected/취업·진로/비교발언/가사분담, flex gap8 overflowX auto) <Spacing size={16}/>\n<Paragraph.Text typography=\"t4\">톤</Paragraph.Text> 톤 Chip(정중하게 selected/단호하게/유머러스하게) <Spacing size={16}/>\n<TextField variant=\"box\" label=\"곤란했던 질문\" hasError={err} help=\"예: 애는 언제 낳니?\"/>\nFixedBottomCTA: <TossRewardAd slotId={VITE_TOSS_AD_SLOT_ID}>로 감싼 <Button variant=\"fill\" size=\"large\">스크립트 만들기</Button>\nStates — Loading: 제출 중 버튼 비활성+로딩 인디케이터, 중복 제출 차단(AC-6). Empty: 기록 탭 ht_scripts 빈 배열→Asset.ContentIcon+\"아직 만든 스크립트가 없어요\"(AC-7). Error: 빈 질문 시 hasError+help \"곤란했던 질문을 입력해주세요\"(AC-4), API 500·네트워크 시 AlertDialog \"잠시 후 다시 시도해주세요\"+\"다시 시도\" Button(AC-5). AI 첫 이용 고지 AlertDialog 1회. Interactions: Chip 탭→tickWeak; 만들기→검증 통과 시 TossRewardAd 시청→POST→/script/result 이동+success 햅틱. 여백 TDS Spacing만."
+  },
+  {
+    "id": "0009",
+    "title": "스크립트 결과 페이지 `/script/result`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "location.state의 scriptId로 ht_scripts에서 항목을 조회해 AI 생성 응답을 결과 카드로 표시하는 화면. state가 없으면 입력 화면으로 리다이렉트. AI 생성 라벨 배지 필수. 복사/재생성 등 액션 제공.",
+      "acceptance_criteria": [
+        "location.state.scriptId로 ht_scripts에서 항목 조회해 resultText를 결과 카드에 표시",
+        "state가 없거나 항목 미존재 시 Navigate to='/script' replace로 리다이렉트, 크래시 없음",
+        "결과 카드 하단에 \"AI가 생성한 결과입니다\" 배지 표시",
+        "결과 텍스트 복사 시 토스트 표시, 다시 만들기 버튼 탭 시 /script 이동"
+      ]
+    },
+    "covers": [
+      "F2-AC3",
+      "F2-AC결과계약(S4)"
+    ],
+    "files": [
+      "src/pages/ScriptResultPage.tsx"
+    ],
+    "definition_of_done": [
+      "const s = (useLocation().state as RouteState['/script/result']) ?? null; if(!s) return <Navigate to='/script' replace/>",
+      "AI 라벨 배지는 TDS Badge/Chip 사용, HEX 하드코딩 없음",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "RouteState['/script/result'] = { scriptId: string }; Script 조회 → key: ht_scripts",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "Pattern: ContentDetail(결과 카드 중심). TDS: Top, Paragraph, ListRow/Card, Badge, Chip, Spacing, Button, Toast. Layout:\n<Top title={<Top.TitleParagraph>추천 응대</Top.TitleParagraph>} />\n<Spacing size={16}/> 상황·톤 요약 Chip 표시\n결과 카드: <Paragraph.Text typography=\"t3\">{resultText}</Paragraph.Text> — 여러 문단 지원\n카드 하단 <Badge>AI가 생성한 결과입니다</Badge> (AC-3 필수)\n<Spacing size={24}/> 액션 버튼: <Button variant=\"weak\">복사하기</Button> / <Button variant=\"fill\">다시 만들기</Button>\nStates — Loading: 조회 즉시 완료(로컬), 필요 시 스켈레톤. Empty/Error: state 없거나 scriptId 항목 미존재 시 <Navigate to='/script' replace/>로 리다이렉트(직접진입·새로고침 크래시 방지). Interactions: 복사→Toast \"복사했어요\"+tickWeak; 다시 만들기→nav('/script'). 여백은 TDS Spacing만, 색상은 var(--tds-color-*)."
+  },
+  {
+    "id": "0010",
+    "title": "방문 균형 캘린더 `/calendar`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "본가/처가 방문 일정을 등록·삭제하고 두 집 체류 시간 균형을 MiniBar로 시각화하는 화면. 활성 명절 기준 Visit 목록 표시, 70% 초과 시 불균형 경고 Chip. 입력 BottomSheet, 잘못된 기간 거부, 빈 상태, 20개 초과 스크롤 처리.",
+      "acceptance_criteria": [
+        "{ family, date, startHour, durationHours, memo } 제출 시 ht_visits 저장 + 목록 추가 + 토스트 \"일정이 추가됐어요\"",
+        "균형 지표를 calcBalance로 계산해 \"본가 25% / 시댁 75%\" MiniBar + 강조 숫자(t2) 표시, 한쪽 70% 초과 시 경고 Chip \"한쪽에 시간이 몰려 있어요\"",
+        "항목 삭제 액션 탭 후 AlertDialog에서 \"삭제\" 확인 시 ht_visits에서 제거 + 균형 재계산",
+        "durationHours:0 제출 시 에러 \"체류 시간은 1시간 이상이어야 해요\", 저장 안 됨",
+        "ht_visits 빈 배열 시 Asset.ContentIcon + \"아직 등록된 방문 일정이 없어요\" + \"일정 추가\" 버튼, 20개 초과 시 세로 스크롤 렌더 지연 없음"
+      ]
+    },
+    "covers": [
+      "F3-AC1",
+      "F3-AC2",
+      "F3-AC3",
+      "F3-AC4",
+      "F3-AC5",
+      "F3-AC6",
+      "F3-AC7"
+    ],
+    "files": [
+      "src/pages/CalendarPage.tsx"
+    ],
+    "definition_of_done": [
+      "Couple 라벨(본가/시댁)을 useAppData 단일 소스에서 해석, 하드코딩 금지",
+      "삭제 확인 AlertDialog 왼쪽 버튼 라벨 \"닫기\"",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "interface Visit { id:string; family:\"mine\"|\"partner\"; date:string; startHour:number; durationHours:number; holidayId:string; memo:string } → key: ht_visits; 파생 calcBalance(visits)→{minePct,partnerPct}, isImbalanced",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "Pattern: List + FloatingAdd/BottomSheet. TDS: Top, Paragraph, Spacing, ListRow, Chip, Button, BottomSheet, TextField, AlertDialog, Toast. 템플릿: MiniBar, Asset.ContentIcon. Layout:\n<Top title={<Top.TitleParagraph>방문 균형</Top.TitleParagraph>} />\n균형 요약: MiniBar 본가%/시댁% + 강조 숫자 typography=\"t2\", 70% 초과 시 <Chip label=\"한쪽에 시간이 몰려 있어요\" variant=\"filled\"/> (AC-3)\n<Spacing size={16}/> 일정 목록: 각 Visit을 <ListRow contents={<ListRow.Texts type=\"2RowTypeA\" top=\"시댁 · 09/25 10시\" bottom=\"6시간 · 차례\"/>} right={삭제 액션}/> — 20개 초과 세로 스크롤(AC-7)\n하단 \"일정 추가\" Button → 입력 BottomSheet(가족 선택 Chip, date/startHour/durationHours TextField, memo)\nStates — Empty: ht_visits 빈 배열→Asset.ContentIcon+\"아직 등록된 방문 일정이 없어요\"+\"일정 추가\" Button(AC-6). Error: durationHours<1 시 TextField hasError+\"체류 시간은 1시간 이상이어야 해요\"(AC-5). Interactions: 추가 제출→ht_visits 저장+Toast \"일정이 추가됐어요\"+success 햅틱; 삭제→AlertDialog(왼쪽 \"닫기\", 오른쪽 \"삭제\") 확인 시 제거+균형 재계산. 라벨은 Couple 설정 반영. 여백 TDS Spacing만."
+  },
+  {
+    "id": "0011",
+    "title": "예산 & 체크리스트 `/budget`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "명절별 용돈·선물·교통비를 본가/시댁별로 입력해 총액과 균형을 계산하고, 갈등 방지 체크리스트를 점검하는 화면. Tab 또는 섹션으로 예산/체크리스트 구분. SummaryHero 총액 CountUp + MiniBar 비율. 음수 금액 거부, Switch 완료 토글.",
+      "acceptance_criteria": [
+        "{ target, category, label, amount } 제출 시 ht_budget 저장 + 총액 갱신 + 성공 토스트",
+        "calcBudget로 총액을 SummaryHero에 CountUp 표시(예 500,000원)하고 본가/시댁 비율 MiniBar 시각화",
+        "체크리스트 항목 Switch on 시 ht_checklist 해당 항목 done:true 저장, 완료 개수 \"3/5\" 갱신",
+        "음수 금액(amount<0 또는 비정수) 제출 시 에러 메시지 표시, 저장 안 됨"
+      ]
+    },
+    "covers": [
+      "F4-AC1",
+      "F4-AC2",
+      "F4-AC3",
+      "F4-AC4"
+    ],
+    "files": [
+      "src/pages/BudgetPage.tsx"
+    ],
+    "definition_of_done": [
+      "금액 표시는 천단위 콤마 포맷, amount는 정수·0 이상 검증",
+      "Switch(Toggle 아님) 사용, 완료 개수는 calcChecklistProgress 사용",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "interface BudgetItem { id:string; holidayId:string; target:\"본가\"|\"시댁\"|\"기타\"; category:\"용돈\"|\"선물\"|\"교통\"|\"기타\"; label:string; amount:number } → key: ht_budget; interface ChecklistItem { id:string; holidayId:string; text:string; done:boolean } → key: ht_checklist",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "Pattern: StatusPanel + List. TDS: Top, Tab, Paragraph, Spacing, ListRow, Chip, TextField, Switch, Button, BottomSheet, Toast. 템플릿: SummaryHero, MiniBar. Layout:\n<Top title={<Top.TitleParagraph>예산 & 체크리스트</Top.TitleParagraph>} />\n<SummaryHero label=\"예산 총액\" value={<Amount value={total} unit=\"원\" typography=\"t1\"/>} /> — CountUp\n<Spacing size={12}/> MiniBar 본가/시댁 비율\n<Tab>예산 / 체크리스트</Tab>\n[예산] BudgetItem을 target별 ListRow 목록, 하단 \"항목 추가\" Button→BottomSheet(target Chip, category Chip, label/amount TextField)\n[체크리스트] 각 ChecklistItem을 <ListRow contents={<ListRow.Texts top={text}/>} right={<Switch checked={done}/>}/>, 상단 완료 개수 \"3/5\"\nStates — Empty: 항목 없으면 안내+추가 버튼. Error: amount<0/비정수 시 TextField hasError+\"0원 이상 숫자로 입력해주세요\"(AC-4), 저장 차단. Interactions: 예산 추가→ht_budget 저장+Toast+총액 갱신+success 햅틱; Switch 토글→ht_checklist done 저장+tickWeak+완료 개수 갱신. 라벨은 Couple 설정 반영. 여백 TDS Spacing만, Toggle 금지 Switch 사용."
+  },
+  {
+    "id": "0012",
+    "title": "감정소진 기록 입력 `/report/new`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "명절 후 감정소진 수준(1~5), 스트레스 태그, 메모를 기록하는 입력 화면. 활성 명절 기준 MoodLog 저장. 소진 레벨 선택 UI, 태그 다중 선택 Chip, 메모 TextField. 저장 성공 시 리포트로 이동.",
+      "acceptance_criteria": [
+        "{ exhaustionLevel, stressTags, note } 제출 시 ht_moodlogs에 저장 + 성공 토스트 후 navigate('/report')",
+        "소진 레벨 1~5 중 하나 선택 필수, 미선택 시 저장 차단 및 에러 표시",
+        "스트레스 태그는 프리셋 Chip 다중 선택 가능(예 과한질문/가사노동/일정불균형), note는 0~200자",
+        "저장 실패(QuotaExceededError) 시 AlertDialog \"저장 공간이 부족해요. 기록을 정리해주세요\", 크래시 없음"
+      ]
+    },
+    "covers": [
+      "F5-AC1",
+      "F5-AC입력"
+    ],
+    "files": [
+      "src/pages/MoodNewPage.tsx"
+    ],
+    "definition_of_done": [
+      "stressTags는 types.ts의 프리셋 상수 배열 사용",
+      "소진 레벨 선택 요소 ≥44px, 태그 Chip 탭에 tickWeak",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "interface MoodLog { id:string; holidayId:string; exhaustionLevel:number; stressTags:string[]; note:string; createdAt:number } → key: ht_moodlogs",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "Pattern: FixedBottomCTA. TDS: Top, Paragraph, Spacing, Chip, TextField, Button, AlertDialog, Toast. Layout:\n<Top title={<Top.TitleParagraph>명절 후 기록</Top.TitleParagraph>} />\n<Spacing size={16}/> <Paragraph.Text typography=\"t4\">오늘 얼마나 지쳤나요?</Paragraph.Text>\n소진 레벨 1~5 선택(Chip 또는 세그먼트, 1=괜찮음 5=매우 소진, 각 ≥44px) <Spacing size={16}/>\n<Paragraph.Text typography=\"t4\">무엇이 힘들었나요?</Paragraph.Text>\n스트레스 태그 Chip 다중 선택(과한질문/가사노동/일정불균형 등 프리셋, flex gap8 flexWrap) <Spacing size={16}/>\n<TextField variant=\"box\" label=\"메모\" help=\"0~200자\" />\nFixedBottomCTA: <Button variant=\"fill\" size=\"large\">기록 저장하기</Button>\nStates — Error: 소진 레벨 미선택 시 인라인 에러+저장 차단, QuotaExceededError 시 AlertDialog \"저장 공간이 부족해요. 기록을 정리해주세요\". Interactions: 레벨·태그 Chip 탭→tickWeak; 저장→ht_moodlogs 저장+success 햅틱+Toast→nav('/report'). 여백 TDS Spacing만."
+  },
+  {
+    "id": "0013",
+    "title": "감정 리포트 `/report`",
+    "epic": "Epic 3. UI Pages",
+    "task": {
+      "description": "누적 MoodLog를 집계해 평균 소진도, 추이 Sparkline, 상위 스트레스 태그를 보여주는 리포트 화면. 기록 추가 진입점 제공. 빈 상태 안내, 로컬 집계라 에러 없음.",
+      "acceptance_criteria": [
+        "calcMoodReport(logs)로 평균 소진도(avg), 추이(trend), 상위 태그(topTags)를 계산해 표시",
+        "추이는 Sparkline으로 시각화, 상위 스트레스 태그는 Chip 목록으로 표시",
+        "ht_moodlogs 빈 배열 시 Asset.ContentIcon + \"아직 기록이 없어요\" + \"기록 추가\" 버튼 표시",
+        "\"기록 추가\" 버튼 탭 시 navigate('/report/new') 이동"
+      ]
+    },
+    "covers": [
+      "F5-AC2",
+      "F5-AC3",
+      "F5-AC빈상태"
+    ],
+    "files": [
+      "src/pages/ReportPage.tsx"
+    ],
+    "definition_of_done": [
+      "집계는 useAppData의 calcMoodReport 순수 함수 사용",
+      "Sparkline은 템플릿 컴포넌트 사용, HEX 하드코딩 없음",
+      "tsc --noEmit 통과, console.error 0"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "MoodLog[] → key: ht_moodlogs; 파생 calcMoodReport(logs)→{ avg:number; trend:number[]; topTags:string[] }",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "Pattern: StatusPanel. TDS: Top, Paragraph, Spacing, ListRow, Chip, Button, Badge. 템플릿: SummaryHero, Sparkline, Asset.ContentIcon. Layout:\n<Top title={<Top.TitleParagraph>감정 리포트</Top.TitleParagraph>} />\n<SummaryHero label=\"평균 소진도\" value={<Amount value={avg} unit=\"/5\" typography=\"t1\"/>} caption=\"최근 명절 추이\" /> <Spacing size={16}/>\n<Paragraph.Text typography=\"t4\">소진 추이</Paragraph.Text> <Spacing size={12}/> <Sparkline data={trend}/>\n<Spacing size={16}/> <Paragraph.Text typography=\"t4\">주요 스트레스</Paragraph.Text>\n상위 태그 Chip 목록(topTags, flex gap8 flexWrap)\n<Spacing size={24}/> <Button variant=\"fill\" size=\"large\">기록 추가</Button>\nStates — Loading: 로컬 집계로 즉시. Empty: ht_moodlogs 빈 배열→Asset.ContentIcon+\"아직 기록이 없어요\"+\"기록 추가\" Button. Error: 없음(로컬 집계). Interactions: 기록 추가→nav('/report/new')+tickWeak. 여백 TDS Spacing만, 색상 var(--tds-color-*)."
+  },
+  {
+    "id": "0014",
+    "title": "라우팅 배선 + 설정 가드 + 세션 배선 + 탭바",
+    "epic": "4",
+    "task": {
+      "description": "src/App.tsx에서 react-router-dom BrowserRouter로 8개 라우트(/, /setup, /script, /script/result, /calendar, /budget, /report, /report/new)를 연결한다. ht_couple 미설정 시 /setup으로 replace 리다이렉트하는 설정 가드를 적용하고, 로드 중 스켈레톤을 노출한다. Task 1.4의 useTossIntegration을 비차단으로 호출해 통합 상태를 조회하되 렌더를 막지 않는다. FloatingTabBar(홈/캘린더/예산/스크립트/리포트 5탭)를 하단에 배치하고 AI 사전 고지 AlertDialog를 App 레이아웃에 1회성으로 배선한다.",
+      "acceptance_criteria": [
+        "8개 라우트가 모두 연결되고 각 경로가 해당 페이지를 렌더한다",
+        "ht_couple 미설정 시 /setup으로 replace 이동, 설정됨이면 홈 렌더 (F1-AC6)",
+        "useTossIntegration 호출이 integrated 값과 무관하게 앱 렌더를 차단하지 않으며 크래시/무한로딩 없음",
+        "FloatingTabBar 5탭이 표시되고 활성탭 컬러 틴트, 각 탭 ≥44px",
+        "F2 탭 첫 진입 시 aiNoticeAcknowledged=false면 AI 고지 AlertDialog 1회 표시 후 true 저장 (F2-AC/AI고지)"
+      ]
+    },
+    "covers": [
+      "F1-AC6",
+      "F2-AC3",
+      "Common:인증",
+      "Common:AI고지"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "BrowserRouter + Routes로 8개 경로 정의, /script/result·/report/new 포함",
+      "설정 가드: loading 중 스켈레톤, 미설정 시 <Navigate to='/setup' replace/>",
+      "useTossIntegration()을 비차단 호출(결과 무관 렌더 진행), 로그인/세션 획득 함수 호출 0건",
+      "FloatingTabBar 5탭(홈/캘린더/예산/스크립트/리포트), 활성탭 컬러 틴트",
+      "AI 사전 고지 AlertDialog 1회성 배선, 확인 시 acknowledgeAiNotice 저장",
+      "main.tsx 미수정(@AI:ANCHOR 보호), tsc --noEmit 통과"
+    ],
+    "depends_on": [
+      "0003",
+      "0004",
+      "0006",
+      "0007",
+      "0008",
+      "0009",
+      "0010",
+      "0011",
+      "0012",
+      "0013"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "react-router-dom"
+    ],
+    "ui_requirements": "메인 내비게이션: 템플릿 제공 FloatingTabBar 5탭 — 홈(/), 캘린더(/calendar), 예산(/budget), 스크립트(/script), 리포트(/report). 활성탭=아이콘·라벨 컬러 틴트만. 하단 fixed 요소이므로 paddingBottom: calc(Npx + env(safe-area-inset-bottom)). AI 사전 고지(Pattern H)는 App 레이아웃에 1회성 배치 — TDS AlertDialog '이 서비스는 생성형 AI를 활용합니다', 왼쪽 버튼 '닫기', 확인 시 aiNoticeAcknowledged=true 저장. 로드 중 스켈레톤(placeholder ListRow). 미설정 시 /setup 리다이렉트. 여백은 TDS Spacing(size 필수)만, HEX 하드코딩 금지."
+  },
+  {
+    "id": "0015",
+    "title": "외부 이탈 차단 + 콘솔 정리 + 프로모션 미노출 최종 점검",
+    "epic": "Epic 4. Integration + Polish",
+    "task": {
+      "description": "통합 컴포넌트/훅 파일만 생성하고 최종 UX 폴리시를 담당한다(App.tsx·main.tsx는 건드리지 않음). 앱 전역에서 window.location.href/window.open을 통한 외부 URL 이동이 없음을 보장하는 안전 네비게이션 유틸과, 프로덕션 빌드에서 console.error 출력 0개를 보장하는 로깅 가드 유틸을 제공한다. F1-AC7에 따라 grantPromotionReward 미사용 상태에서 프로모션 관련 UI가 어디에도 노출되지 않음을 검증하는 정적 체크 유틸/문서 주석을 포함한다. 외부 분석 솔루션(GA/Amplitude) 미사용을 보증한다.",
+      "acceptance_criteria": [
+        "window.location.href/window.open으로 외부 URL 이동 코드 0건, 내부 네비게이션은 라우터만 사용",
+        "프로덕션 빌드에서 console.error 출력 0개(로깅 가드로 흡수)",
+        "grantPromotionReward 미호출, 프로모션 관련 UI 컴포넌트 노출 0건 (F1-AC7)",
+        "외부 분석 솔루션(GA/Amplitude) import/호출 0건"
+      ]
+    },
+    "covers": [
+      "F1-AC7",
+      "Common:외부이탈",
+      "Common:콘솔",
+      "Common:수익화(프로모션제외)"
+    ],
+    "files": [
+      "src/lib/safeNavigation.ts",
+      "src/lib/logGuard.ts"
+    ],
+    "definition_of_done": [
+      "safeNavigate 유틸: 외부 URL 차단, 내부 경로만 허용(라우터 위임)",
+      "logGuard: 프로덕션 환경에서 console.error 무출력 처리, 구조화 결과만 사용",
+      "grantPromotionReward 미사용 명시 주석 + 프로모션 UI 미노출 정적 확인",
+      "GA/Amplitude 등 외부 분석 SDK import 0건",
+      "tsc --noEmit 통과, 앱 정상 부팅"
+    ],
+    "depends_on": [
+      "0014"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "UI 신규 화면 없음 — 유틸/가드 파일만. 프로모션 관련 배너/버튼/CTA를 어떤 페이지에도 추가하지 않는다(F1-AC7 미노출). 외부 링크 이동은 서비스 본질과 무관하면 전면 금지, 내부 이동은 react-router-dom navigate만 사용. HEX 하드코딩·외부 분석 SDK 금지."
+  }
+]
