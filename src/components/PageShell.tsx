@@ -1,3 +1,4 @@
+import { createElement as h } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 /**
@@ -6,19 +7,22 @@ import type { CSSProperties, ReactNode } from "react";
  *
  * Pre-built (재구현 금지): 새 페이지는 이 컴포넌트로 감싸라.
  * 헤더/하단 CTA까지 한 번에 두려면 ScreenScaffold를 쓰라.
+ *
+ * NOTE: JSX 대신 createElement 사용 — 모든 페이지가 이 컴포넌트를 거치는데, 페이지 테스트의
+ * `require("@/pages/...")`는 Node 네이티브 로드 경로를 타서 JSX를 트랜스파일하지 못한다.
  */
 export function PageShell({ children, style }: { children: ReactNode; style?: CSSProperties }) {
-  return (
-    <div
-      style={{
+  return h(
+    "div",
+    {
+      style: {
         minHeight: "100dvh",
         paddingTop: "calc(var(--toss-safe-area-top) + 16px)",
         paddingBottom: "calc(var(--toss-safe-area-bottom) + 16px)",
         backgroundColor: "var(--adaptiveBackground)",
         ...style,
-      }}
-    >
-      {children}
-    </div>
+      },
+    },
+    children,
   );
 }

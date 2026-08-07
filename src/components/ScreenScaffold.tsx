@@ -1,3 +1,4 @@
+import { createElement as h, Fragment } from "react";
 import type { ReactNode } from "react";
 import { PageShell } from "./PageShell";
 
@@ -13,6 +14,9 @@ import { PageShell } from "./PageShell";
  *   </ScreenScaffold>
  *
  * top을 주면 <Top/>이 자체 safe-area를 처리하므로 상단 패딩을 제거한다.
+ *
+ * NOTE: JSX 대신 createElement 사용 — 모든 페이지가 이 컴포넌트를 거치는데, 페이지 테스트의
+ * `require("@/pages/...")`는 Node 네이티브 로드 경로를 타서 JSX를 트랜스파일하지 못한다.
  */
 export function ScreenScaffold({
   top,
@@ -23,11 +27,14 @@ export function ScreenScaffold({
   children: ReactNode;
   bottom?: ReactNode;
 }) {
-  return (
-    <PageShell style={top ? { paddingTop: 0 } : undefined}>
-      {top}
-      <div style={{ padding: "16px 16px 0" }}>{children}</div>
-      {bottom}
-    </PageShell>
-  );
+  return h(PageShell, {
+    style: top ? { paddingTop: 0 } : undefined,
+    children: h(
+      Fragment,
+      null,
+      top,
+      h("div", { style: { padding: "16px 16px 0" } }, children),
+      bottom,
+    ),
+  });
 }

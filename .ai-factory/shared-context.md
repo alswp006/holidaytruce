@@ -218,12 +218,17 @@ export type RouteState = {
     utils.ts
   main.tsx
   pages/
+    BudgetPage.tsx
+    CalendarPage.tsx
     Home.tsx
     HomePage.tsx
+    ScriptResultPage.tsx
     SetupPage.tsx
     __TdsGallery.tsx
     __chiptest.tsx
     __noJsxTest.tsx
+    __tmpMinimal.ts
+    __tmpMinimal.tsx
   styles/
     globals.css
     home-purchase.css
@@ -260,7 +265,10 @@ export type RouteState = {
   lib/holidays.ts → imports: lib/types
   lib/scriptApi.ts → imports: lib/types
   lib/storage.ts → imports: lib/types
+  pages/BudgetPage.tsx → imports: components/ScreenScaffold, components/SummaryHero, components/CountUp, components/Card, components/MiniBar, components/StateView, lib/storage, lib/useAppData, lib/utils, lib/types
+  pages/CalendarPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, components/Card, components/MiniBar, components/StateView, lib/storage, lib/useAppData, lib/types
   pages/HomePage.tsx → imports: components/ScreenScaffold, components/SummaryHero, components/Card, components/Amount, components/MiniBar, components/AdSlot, components/TossPurchase, lib/storage, lib/useAppData, lib/holidays, lib/types
+  pages/ScriptResultPage.tsx → imports: components/ScreenScaffold, components/Card, lib/storage, lib/types
   pages/SetupPage.tsx → imports: components/ScreenScaffold, components/BottomCTA, components/StateView, lib/storage, lib/holidays, lib/types
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
 
