@@ -210,6 +210,8 @@ export type RouteState = {
   hooks/
   lib/
     contract.ts
+    holidays.ts
+    scriptApi.ts
     storage.ts
     types.ts
     utils.ts
@@ -225,7 +227,9 @@ export type RouteState = {
 
 ### Exports (src/lib/)
 - contract.ts: export type User =; export type FamilyMember =; export type Schedule =; export type Mood =; export type Budget =; export type getUserFn = () => User | null; export type saveUserFn = (user: User) => void; export type getFamilyMembersFn = () => FamilyMember[]
-- storage.ts: export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): void; export function removeItem(key: string): void
+- holidays.ts: export const HOLIDAYS: Holiday[] = [; export function getHolidayById(id: string): Holiday | null; export function getDday(holidayId: string, today: Date = new Date()): number | null
+- scriptApi.ts: export async function requestScript( req: ScriptRequest ): Promise<
+- storage.ts: export type WriteResult =; export function uuid(): string; export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): WriteResult; export function removeItem(key: string): void; export function getCouple(): Couple | null; export function saveCouple(couple: Couple): WriteResult; export function getVisits(): Visit[]
 - types.ts: export interface Couple; export interface Visit; export interface BudgetItem; export interface ChecklistItem; export interface Script; export interface MoodLog; export interface AppFlags; export interface Holiday
 - utils.ts: export function cn(...classes: (string | boolean | undefined | null)[]): string; export function formatNumber(n: number): string; export function formatCurrency(n: number, currency = 'KRW'): string
 
@@ -244,8 +248,14 @@ export type RouteState = {
 - SummaryHero.tsx: SummaryHero
 - TossPurchase.tsx: TossPurchase
 - TossRewardAd.tsx: TossRewardAd
+
+### Module Dependencies (import graph)
+  lib/holidays.ts → imports: lib/types
+  lib/scriptApi.ts → imports: lib/types
+  lib/storage.ts → imports: lib/types
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
 
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 엔티티 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
 - 0002: localStorage CRUD 헬퍼 + 명절 상수 테이블 (files: src/lib/storage.ts, src/lib/holidays.ts)
+- 0005: 스크립트 생성 API 클라이언트 (files: src/lib/scriptApi.ts)
