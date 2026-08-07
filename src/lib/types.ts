@@ -64,6 +64,8 @@ export interface AppFlags {
 export interface Holiday {
   id: string;
   name: string;
+  /** "YYYY-MM-DD" 양력 날짜 — D-day 계산 등에 사용 */
+  date?: string;
 }
 
 // ============================================================================
